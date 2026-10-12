@@ -1,0 +1,68 @@
+name: I0 Robolectric CI Diagnostic (experimental)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose-app-common-io:
+    name: Diagnose app-common-io (${{ matrix.flavor }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: Foss
+            task: testFossDebugUnitTest
+          - flavor: Gplay
+            task: testGplayDebugUnitTest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    steps:
+      - name: Checkout pinned source branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup existing project toolchain and Robolectric cache
+        uses: ./.github/actions/common-setup
+        with:
+          robolectric-cache-scope: i0-diag-app-common-io
+
+      - name: Capture Robolectric Maven endpoint reachability (diagnostic only)
+        shell: bash
+        run: |
+          for host in repo1.maven.org repo.maven.apache.org; do
+            url="https://${host}/maven2/org/robolectric/android-all-instrumented/11-robolectric-6757853-i7/android-all-instrumented-11-robolectric-6757853-i7.pom"
+            printf '%s\n' "Endpoint ${host}:"
+            curl --head --location --silent --show-error --fail --retry 2 --retry-delay 2 --connect-timeout 12 --max-time 35 --output /dev/null --write-out 'HTTP %{http_code}; seconds=%{time_total}\n' "$url" || echo 'Endpoint probe FAILED (nonfatal; unit tests still determine result)'
+          done
+
+      - name: Run complete targeted module suite with alternate runtime Maven endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./gradlew --init-script .github/ci/i0-robolectric.init.gradle \
+            ":app-common-io:${{ matrix.task }}" --rerun-tasks --no-build-cache --stacktrace \
+            2>&1 | tee "$RUNNER_TEMP/i0-${{ matrix.flavor }}-test.log"
+
+      - name: Fail closed on missing or unsuccessful JUnit cases
+        run: |
+          python3 .github/ci/i0-assert-test-results.py --dir "app-common-io/build/test-results/${{ matrix.task }}"
+
+      - name: Save newly fetched Robolectric SDK jars in isolated cache
+        if: ${{ !cancelled() }}
+        uses: ./.github/actions/robolectric-cache-save
+
+      - name: Upload reports and diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: i0-robolectric-${{ matrix.flavor }}
+          path: |
+            app-common-io/build/test-results/**/*.xml
+            app-common-io/build/reports/tests/**
+            ${{ runner.temp }}/i0-${{ matrix.flavor }}-test.log
+          if-no-files-found: warn
+          retention-days: 7

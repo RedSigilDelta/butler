@@ -27,19 +27,19 @@ class UpgradeTest {
         app.click(app.createTabAction())
         app.finishTour("tour_templates_picker_title")
         app.click(app.text("explorer_title"))
-        app.await(app.text("explorer_navigation_recent"))
+        app.await(app.text("explorer_navigation_home"))
 
         // Give the tab time to be saved, then prove this build kept it before the upgrade replaces it.
         SystemClock.sleep(SESSION_SAVE_SETTLE_MS)
         app.forceStop()
         app.launch()
-        app.await(app.text("explorer_navigation_recent"))
+        app.await(app.text("explorer_navigation_home"))
     }
 
     @Test
     fun afterUpgrade() {
         app.launch()
-        app.await(app.text("explorer_navigation_recent"))
+        app.await(app.text("explorer_navigation_home"))
     }
 
     companion object {
