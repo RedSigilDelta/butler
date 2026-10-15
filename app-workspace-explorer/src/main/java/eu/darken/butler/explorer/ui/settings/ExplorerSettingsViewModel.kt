@@ -27,18 +27,20 @@ class ExplorerSettingsViewModel @Inject constructor(
         explorerSettings.useRegexPatterns.flow,
         explorerSettings.useBackButtonForNavigation.flow,
         explorerSettings.openFilesOnTap.flow,
+        explorerSettings.showSystemLocations.flow,
         trashSettings.enabled.flow,
         trashSettings.expiresAfter.flow,
         trashSettings.maxTrashSize.flow,
         folderSortRules.count,
         trashSettings.confirmTrashMove.flow,
-    ) { sortSettings, useRegexPatterns, useBackButtonForNavigation, openFilesOnTap, recycleBinEnabled, expiresAfter, maxSize, folderSortRuleCount, confirmTrashMove ->
+    ) { sortSettings, useRegexPatterns, useBackButtonForNavigation, openFilesOnTap, showSystemLocations, recycleBinEnabled, expiresAfter, maxSize, folderSortRuleCount, confirmTrashMove ->
         State(
             sortSettings = sortSettings,
             folderSortRuleCount = folderSortRuleCount,
             useRegexPatterns = useRegexPatterns,
             useBackButtonForNavigation = useBackButtonForNavigation,
             openFilesOnTap = openFilesOnTap,
+            showSystemLocations = showSystemLocations,
             trashEnabled = recycleBinEnabled,
             trashAutoDeleteDays = expiresAfter.inWholeDays.toInt(),
             trashMaxSizeMB = maxSize / 1048576L,
@@ -57,6 +59,10 @@ class ExplorerSettingsViewModel @Inject constructor(
     fun toggleOpenFilesOnTap(enabled: Boolean) = launch {
         log(tag) { "toggleOpenFilesOnTap($enabled)" }
         explorerSettings.openFilesOnTap.value(enabled)
+    }
+
+    fun toggleShowSystemLocations(enabled: Boolean) = launch {
+        explorerSettings.showSystemLocations.value(enabled)
     }
 
     fun toggleTrash(enabled: Boolean) = launch {
@@ -89,6 +95,7 @@ class ExplorerSettingsViewModel @Inject constructor(
         val useRegexPatterns: Boolean,
         val useBackButtonForNavigation: Boolean,
         val openFilesOnTap: Boolean = false,
+        val showSystemLocations: Boolean = false,
         val trashEnabled: Boolean = true,
         val confirmTrashMove: Boolean = true,
         val trashAutoDeleteDays: Int = 30,
