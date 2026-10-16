@@ -1,0 +1,9 @@
+// I0 EXPERIMENT — test-worker-only transport selection; no production app changes.
+// Robolectric's default runtime resolver targets repo1.maven.org.
+// This injects the Apache Maven Central canonical endpoint into Test JVMs.
+gradle.beforeProject { project ->
+    project.tasks.withType(org.gradle.api.tasks.testing.Test).configureEach { testTask ->
+        testTask.systemProperty('robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2')
+        testTask.systemProperty('robolectric.dependency.repo.id', 'mavenCentral')
+    }
+}
