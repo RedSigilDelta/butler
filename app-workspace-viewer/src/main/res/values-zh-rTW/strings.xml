@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">開啟方式</string>
     <string name="viewer_image_content_description">影像 %1$s</string>
     <string name="viewer_toolbar_folder_label">資料夾</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">第 %1$d 個檔案，共 %2$d 個</string>
     <string name="viewer_back_action">返回</string>
 
     <!-- 操作列 -->
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">無法讀取此檔案</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">刪除從資料夾開啟的檔案後，顯示該資料夾中的下一個檔案，而不是關閉檢視器。</string>
     <string name="viewer_settings_show_next_after_delete_title">刪除後顯示下一個檔案</string>
+    <string name="viewer_settings_swipe_between_files_title">滑動切換檔案</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">在從資料夾開啟的檔案上向左或向右滑動，即可顯示該資料夾中的上一個或下一個檔案。</string>
     <string name="viewer_settings_title">檢視器</string>
 </resources>

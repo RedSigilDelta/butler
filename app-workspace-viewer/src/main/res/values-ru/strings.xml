@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Открыть с помощью</string>
     <string name="viewer_image_content_description">Изображение %1$s</string>
     <string name="viewer_toolbar_folder_label">Папка</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Файл %1$d из %2$d</string>
     <string name="viewer_back_action">Назад</string>
 
     <!-- Action bar -->
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">Этот файл невозможно было прочитать</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">После удаления файла, открытого из папки, показывать следующий файл из этой папки вместо закрытия просмотра.</string>
     <string name="viewer_settings_show_next_after_delete_title">Показывать следующий файл после удаления</string>
+    <string name="viewer_settings_swipe_between_files_title">Переключать файлы смахиванием</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Проведите пальцем влево или вправо по файлу, открытому из папки, чтобы показать предыдущий или следующий файл из этой папки.</string>
     <string name="viewer_settings_title">Просмотр</string>
 </resources>

@@ -1,6 +1,7 @@
 package eu.darken.butler.viewer.ui.viewer
 
 import android.content.Context
+import android.graphics.Bitmap
 import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.foundation.layout.width
@@ -8,18 +9,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.test.core.app.ApplicationProvider
 import eu.darken.butler.common.compose.PreviewWrapper
+import eu.darken.butler.common.formatFileSize
 import eu.darken.butler.common.files.LocalPath
 import eu.darken.butler.common.files.MimeInfo
 import eu.darken.butler.common.files.SAFPath
@@ -88,7 +93,13 @@ class ViewerWorkspacePageTest : ComposeTest() {
                         source = ViewerSource.Stored(current),
                         imageSource = null,
                         // The last file of its listing: back is available, forward is not.
-                        neighbours = ViewerNeighbours(current = current, previous = previous, next = null),
+                        neighbours = ViewerNeighbours(
+                            current = current,
+                            previous = previous,
+                            next = null,
+                            position = 2,
+                            count = 2,
+                        ),
                     ),
                     onAction = { clicked.add(it) },
                 )
@@ -421,6 +432,186 @@ class ViewerWorkspacePageTest : ComposeTest() {
         retries shouldBe 1
     }
 
+    private val stepFrom = LocalPath.build("/storage/emulated/0/DCIM/b.jpg")
+    private val stepTo = LocalPath.build("/storage/emulated/0/DCIM/c.jpg")
+    private val stepFromSize = 4_812_331L
+
+    /** The file a step leaves: an image with metadata, in a listing that has a next file. */
+    private fun stepOrigin(imageSource: BitmapZoomableImageSource? = null) = ViewerWorkspaceViewModel.State.Ready(
+        content = ViewerContent.Image(MimeInfo("image/jpeg")),
+        fileInfo = ViewerFileInfo(size = stepFromSize),
+        source = ViewerSource.Stored(stepFrom),
+        imageSource = imageSource,
+        neighbours = ViewerNeighbours(
+            current = stepFrom,
+            previous = LocalPath.build("/storage/emulated/0/DCIM/a.jpg"),
+            next = stepTo,
+            position = 2,
+            count = 3,
+        ),
+    )
+
+    /** The file a step lands on, before its lookup has answered. */
+    private val stepTarget = ViewerWorkspaceViewModel.State.Ready(
+        content = ViewerContent.Loading,
+        fileInfo = null,
+        source = ViewerSource.Stored(stepTo),
+        imageSource = null,
+        neighbours = ViewerNeighbours(
+            current = stepTo,
+            previous = stepFrom,
+            next = null,
+            position = 3,
+            count = 3,
+        ),
+    )
+
+    @Test
+    fun `a step keeps the previous file's info card while the next file loads`() {
+        var state by mutableStateOf<ViewerWorkspaceViewModel.State>(stepOrigin())
+        composeTestRule.setContent {
+            PreviewWrapper {
+                ViewerWorkspacePage(
+                    workspaceId = Workspace.Id(),
+                    design = WorkspaceDesign(layout = WorkspaceDesign.Layout.DUAL_VERTICAL),
+                    state = state,
+                )
+            }
+        }
+        // Size leads the collapsed card, and nothing else on the page shows it.
+        val originSize = composeTestRule.onNodeWithText(formatFileSize(context, stepFromSize))
+        originSize.assertIsDisplayed()
+
+        composeTestRule.runOnIdle { state = stepTarget }
+
+        originSize.assertIsDisplayed()
+    }
+
+    /** [stepOrigin]'s file as the second of five. */
+    private fun positionedState(neighbours: Boolean = true) = ViewerWorkspaceViewModel.State.Ready(
+        content = ViewerContent.Image(MimeInfo("image/jpeg")),
+        fileInfo = ViewerFileInfo(size = stepFromSize),
+        source = ViewerSource.Stored(stepFrom),
+        imageSource = null,
+        neighbours = if (neighbours) {
+            ViewerNeighbours(
+                current = stepFrom,
+                previous = LocalPath.build("/storage/emulated/0/DCIM/a.jpg"),
+                next = stepTo,
+                position = 2,
+                count = 5,
+            )
+        } else {
+            null
+        },
+    )
+
+    private fun setPositionPage(state: () -> ViewerWorkspaceViewModel.State) {
+        composeTestRule.setContent {
+            PreviewWrapper {
+                ViewerWorkspacePage(
+                    workspaceId = Workspace.Id(),
+                    design = WorkspaceDesign(layout = WorkspaceDesign.Layout.DUAL_VERTICAL),
+                    state = state(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `the toolbar shows the file's position in its listing`() {
+        setPositionPage { positionedState() }
+
+        composeTestRule.onAllNodesWithText("2 / 5").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun `a viewer without a listing shows no position`() {
+        setPositionPage { positionedState(neighbours = false) }
+
+        composeTestRule.onAllNodesWithText("2 / 5").assertCountEquals(0)
+        composeTestRule.onAllNodesWithContentDescription("File 2 of 5").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a step keeps the previous file's position while the next file loads`() {
+        var state by mutableStateOf<ViewerWorkspaceViewModel.State>(positionedState())
+        setPositionPage { state }
+        composeTestRule.onAllNodesWithText("2 / 5").onFirst().assertIsDisplayed()
+
+        composeTestRule.runOnIdle { state = stepTarget.copy(neighbours = null) }
+
+        composeTestRule.onAllNodesWithText("2 / 5").onFirst().assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            state = stepTarget.copy(
+                content = ViewerContent.Image(MimeInfo("image/jpeg")),
+                fileInfo = ViewerFileInfo(size = 1024L),
+                neighbours = null,
+            )
+        }
+
+        composeTestRule.onAllNodesWithText("2 / 5").assertCountEquals(0)
+    }
+
+    @Test
+    fun `a step keeps the previous file's position until the next file's listing resolves`() {
+        var state by mutableStateOf<ViewerWorkspaceViewModel.State>(positionedState())
+        setPositionPage { state }
+        composeTestRule.onAllNodesWithText("2 / 5").onFirst().assertIsDisplayed()
+
+        // A file that needs no decoding can arrive loaded before its neighbours do.
+        val loaded = stepTarget.copy(
+            content = ViewerContent.Image(MimeInfo("image/jpeg")),
+            fileInfo = ViewerFileInfo(size = 1024L),
+        )
+        composeTestRule.runOnIdle { state = loaded.copy(neighbours = null, neighboursPending = true) }
+
+        composeTestRule.onAllNodesWithText("2 / 5").onFirst().assertIsDisplayed()
+
+        composeTestRule.runOnIdle {
+            state = loaded.copy(neighbours = loaded.neighbours!!.copy(position = 3, count = 5))
+        }
+
+        composeTestRule.onAllNodesWithText("2 / 5").assertCountEquals(0)
+        composeTestRule.onAllNodesWithText("3 / 5").onFirst().assertIsDisplayed()
+    }
+
+    @Test
+    fun `a step does not bring back chrome the user hid`() {
+        var state by mutableStateOf<ViewerWorkspaceViewModel.State>(
+            stepOrigin(BitmapZoomableImageSource(Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888))),
+        )
+        composeTestRule.setContent {
+            PreviewWrapper {
+                ViewerWorkspacePage(
+                    workspaceId = Workspace.Id(),
+                    design = WorkspaceDesign(layout = WorkspaceDesign.Layout.DUAL_VERTICAL),
+                    state = state,
+                )
+            }
+        }
+        // Leads the bar, so it never moves into the overflow menu, and the target state has it too.
+        val stepBack = composeTestRule
+            .onNodeWithContentDescription(context.getString(R.string.viewer_previous_file_action))
+        stepBack.assertIsDisplayed()
+
+        composeTestRule
+            .onAllNodesWithContentDescription(
+                context.getString(R.string.viewer_image_content_description, "b.jpg"),
+                useUnmergedTree = true,
+            )
+            .onFirst()
+            .performClick()
+        // Telephoto holds a single tap until the double-tap window has passed.
+        composeTestRule.mainClock.advanceTimeBy(1_000L)
+        stepBack.assertIsNotDisplayed()
+
+        composeTestRule.runOnIdle { state = stepTarget }
+
+        stepBack.assertIsNotDisplayed()
+    }
+
     @Test
     fun `an external change brings the chrome back after it was tapped away`() {
         // The chrome is gone whenever the user tapped the picture away or zoomed in, which is
@@ -573,7 +764,13 @@ class ViewerWorkspacePageTest : ComposeTest() {
         val actions = viewerActions(
             source = ViewerSource.Stored(path),
             trashEnabled = true,
-            neighbours = ViewerNeighbours(current = path, previous = null, next = null),
+            neighbours = ViewerNeighbours(
+                current = path,
+                previous = null,
+                next = null,
+                position = 1,
+                count = 1,
+            ),
         )
         composeTestRule.setContent {
             PreviewWrapper {

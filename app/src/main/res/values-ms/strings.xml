@@ -319,8 +319,8 @@
     <string name="tour_swipe_switch_body">Leret ke kiri atau kanan di mana-mana pada halaman untuk beralih antara tab yang terbuka.</string>
     <string name="tour_swipe_create_title">Leret untuk memulakan tab</string>
     <string name="tour_swipe_create_body">Leret melepasi tab terakhir dan Butler menawarkan tab baharu.</string>
-    <string name="tour_swipe_panes_title">Lebih daripada satu tab pada satu masa</string>
-    <string name="tour_swipe_panes_body">Pada skrin lebih besar, atau dalam orientasi landskap, Butler menunjukkan beberapa tab sebelah menyebelah. Tetapan susun atur di bawah Tab menentukan bila ini berlaku.</string>
+    <string name="tour_swipe_panes_title">Pilih susun atur</string>
+    <string name="tour_swipe_panes_body">Mahu susunan lain? Buka menu Butler dan pilih Susun atur. Susun atur yang tersedia bergantung pada saiz tetingkap; sesetengahnya memerlukan Pro.</string>
     <string name="tour_panes_rail_title">Semua tab kamu</string>
     <string name="tour_panes_rail_body">Setiap tab terbuka ada di sini. Ketik satu dan pilih panel untuknya. Tekan dan tahan tab, kemudian seret untuk mengubah susunannya.</string>
     <string name="tour_panes_divider_title">Ubah saiz panel</string>
@@ -330,7 +330,6 @@
     <string name="workspace_creating_placeholder">Mencipta tab…</string>
     <string name="workspace_ondemand_swipe_title">Leret untuk mencipta tab baharu</string>
     <string name="workspace_adaptive_pane_ready">Panel %1$d sedia untuk kandungan</string>
-    <string name="workspace_adaptive_add_action">Tambah tab</string>
     <string name="workspace_badge_tip_title">Petua: Penunjuk butang tab</string>
     <string name="workspace_badge_open_workspaces">Bilangan tab terbuka</string>
     <string name="workspace_badge_active_operations">Operasi aktif (salinan fail, carian, dll.)</string>

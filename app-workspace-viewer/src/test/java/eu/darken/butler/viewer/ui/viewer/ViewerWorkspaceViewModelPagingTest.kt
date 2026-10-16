@@ -142,6 +142,7 @@ class ViewerWorkspaceViewModelPagingTest : BaseTest() {
             // Flow mock completes without emitting, which would stall the state at Initializing.
             trashSettings = mockk<TrashSettings>(relaxed = true).apply {
                 every { enabled.flow } returns flowOf(false)
+                every { confirmTrashMove.flow } returns flowOf(true)
             },
             operationsManager = mockk(relaxed = true),
             appInstallLauncher = mockk(relaxed = true),
@@ -151,6 +152,7 @@ class ViewerWorkspaceViewModelPagingTest : BaseTest() {
             errorIncidentStore = incidentStore,
             viewerSettings = mockk<ViewerSettings>().apply {
                 every { showNextAfterDelete } returns mockDataStoreValue(true)
+                every { swipeBetweenFiles } returns mockDataStoreValue(true)
             },
             chromeFactory = mockk<WorkspacePageChrome.Factory>().apply {
                 every { create(any(), any()) } returns chrome

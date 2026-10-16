@@ -26,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -41,8 +40,10 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import eu.darken.butler.common.compose.ButlerPreviewWrapper
 import eu.darken.butler.common.compose.Preview2
+import eu.darken.butler.common.ui.pagerFriendlyHorizontalScroll
 import eu.darken.butler.viewer.R
 import eu.darken.butler.viewer.core.TextPreview
+import eu.darken.butler.workspace.ui.LocalWorkspaceFocused
 import java.text.NumberFormat
 
 /**
@@ -63,7 +64,12 @@ fun TextFileContent(
      * Editor to open, and neither has a file that is gone - a button for either does nothing at all.
      */
     editorAvailable: Boolean = true,
-
+    /**
+     * Swiping the viewer's content steps through files. A line then scrolls only while it overflows
+     * and keeps a drag at its ends to itself, so a swipe on a line that fits reaches the step instead
+     * of the tab pager.
+     */
+    swipeToStep: Boolean = false,
     contentPadding: PaddingValues = PaddingValues(0.dp),
     barScrollConnections: List<NestedScrollConnection> = emptyList(),
     onOpenInEditor: () -> Unit = {},
@@ -84,6 +90,7 @@ fun TextFileContent(
         return
     }
 
+    val workspaceFocused = LocalWorkspaceFocused.current
     SelectionContainer(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
@@ -106,10 +113,17 @@ fun TextFileContent(
                 // the right instead, so every line opened scrolled to its far end and a log could
                 // not be read without dragging each one of them back.
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    val lineScroll = rememberScrollState()
                     Text(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState())
+                            .then(
+                                if (swipeToStep) {
+                                    Modifier.pagerFriendlyHorizontalScroll(lineScroll, workspaceFocused)
+                                } else {
+                                    Modifier.horizontalScroll(lineScroll)
+                                },
+                            )
                             .padding(horizontal = 12.dp),
                         text = preview.lines[index],
                         style = MaterialTheme.typography.bodySmall,
@@ -136,20 +150,18 @@ fun TextTruncationBar(
     onOpenInEditor: (() -> Unit)?,
 ) {
     val context = LocalContext.current
-    val notice = remember(truncation, context) {
-        when (truncation) {
-            is TextPreview.Truncation.Bytes -> context.getString(
-                R.string.viewer_text_truncated_bytes,
-                Formatter.formatShortFileSize(context, truncation.limit),
-            )
+    val notice = when (truncation) {
+        is TextPreview.Truncation.Bytes -> stringResource(
+            R.string.viewer_text_truncated_bytes,
+            Formatter.formatShortFileSize(context, truncation.limit),
+        )
 
-            is TextPreview.Truncation.Lines -> context.getString(
-                R.string.viewer_text_truncated_lines,
-                NumberFormat.getIntegerInstance().format(truncation.limit),
-            )
+        is TextPreview.Truncation.Lines -> stringResource(
+            R.string.viewer_text_truncated_lines,
+            NumberFormat.getIntegerInstance().format(truncation.limit),
+        )
 
-            is TextPreview.Truncation.LineWidth -> context.getString(R.string.viewer_text_truncated_width)
-        }
+        is TextPreview.Truncation.LineWidth -> stringResource(R.string.viewer_text_truncated_width)
     }
     Card(modifier = modifier) {
         Row(

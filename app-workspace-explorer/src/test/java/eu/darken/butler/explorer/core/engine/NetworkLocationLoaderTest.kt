@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.twotone.Terminal
 import eu.darken.butler.common.compose.icons.SmbShare
 import eu.darken.butler.common.files.SftpPath
+import eu.darken.butler.common.files.WebDavPath
 import eu.darken.butler.common.files.network.NetworkCredentialAvailability
 import eu.darken.butler.common.files.network.NetworkEndpointProbe
 import eu.darken.butler.common.files.network.NetworkEndpointState
@@ -12,6 +13,7 @@ import eu.darken.butler.common.files.network.NetworkLocationRepo
 import eu.darken.butler.common.files.sftp.location.SftpLocation
 import eu.darken.butler.common.files.sftp.location.TrustedHostKey
 import eu.darken.butler.common.files.smb.location.SmbLocation
+import eu.darken.butler.common.files.webdav.location.WebDavLocation
 import eu.darken.butler.workspace.core.Workspace
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -215,6 +217,30 @@ class NetworkLocationLoaderTest : BaseTest() {
     }
 
     @Test
+    fun `a WebDAV location opens at its root`() = runTest {
+        val webDavLocationId = Uuid.parse("33333333-3333-3333-3333-333333333333")
+        val stored = NetworkLocation.WebDav(
+            WebDavLocation(
+                id = webDavLocationId,
+                label = "Nextcloud",
+                url = "https://cloud.example.com/remote.php/dav/files/alice/",
+                authType = WebDavLocation.AuthType.BASIC,
+                username = "alice",
+                rememberCredential = true,
+                credentialVersion = 1,
+                pinnedCertificate = null,
+                trustRevision = 1,
+                createdAt = Instant.fromEpochMilliseconds(0),
+                updatedAt = Instant.fromEpochMilliseconds(0),
+            )
+        )
+        val emissions = networkLoader(listOf(stored)).loadNetwork().take(2).toList()
+
+        val item = emissions.last().items!!.single().shouldBeInstanceOf<ExplorerItem.Storage.Network>()
+        item.target.path shouldBe WebDavPath.root(webDavLocationId)
+    }
+
+    @Test
     fun `SMB and SFTP locations are listed together in the order the repo keeps`() = runTest {
         val smb = NetworkLocation.Smb(location())
         val sftp = NetworkLocation.Sftp(sftpLocation())
@@ -235,6 +261,7 @@ class NetworkLocationLoaderTest : BaseTest() {
             when (it) {
                 is NetworkLocation.Smb -> NetworkCredentialAvailability.AVAILABLE
                 is NetworkLocation.Sftp -> NetworkCredentialAvailability.MISSING
+                is NetworkLocation.WebDav -> error("No WebDAV location is listed here")
             }
         }.loadNetwork().take(2).toList()
 

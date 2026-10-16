@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">เปิดด้วย</string>
     <string name="viewer_image_content_description">รูปภาพ %1$s</string>
     <string name="viewer_toolbar_folder_label">โฟลเดอร์</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">ไฟล์ %1$d จาก %2$d</string>
     <string name="viewer_back_action">ย้อนกลับ</string>
 
     <!-- Action bar -->
@@ -49,8 +51,8 @@
 
     <!-- APK file -->
     <string name="viewer_apk_version_label">เวอร์ชัน</string>
-    <string name="viewer_apk_min_sdk_label">Min SDK</string>
-    <string name="viewer_apk_target_sdk_label">Target SDK</string>
+    <string name="viewer_apk_min_sdk_label">SDK ขั้นต่ำ</string>
+    <string name="viewer_apk_target_sdk_label">SDK เป้าหมาย</string>
     <string name="viewer_apk_installed_label">ติดตั้ง</string>
     <string name="viewer_apk_not_installed_value">ไม่ได้ติดตั้ง</string>
     <string name="viewer_apk_installed_unknown_value">ไม่สามารถตรวจสอบได้</string>
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">ไม่สามารถอ่านไฟล์นี้ได้</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">หลังจากลบไฟล์ที่เปิดจากโฟลเดอร์ ให้แสดงไฟล์ถัดไปในโฟลเดอร์นั้นแทนการปิดตัวดูไฟล์</string>
     <string name="viewer_settings_show_next_after_delete_title">แสดงไฟล์ถัดไปหลังลบ</string>
+    <string name="viewer_settings_swipe_between_files_title">ปัดสลับไฟล์</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">ปัดซ้ายหรือขวาบนไฟล์ที่เปิดจากโฟลเดอร์ เพื่อแสดงไฟล์ก่อนหน้าหรือถัดไปในโฟลเดอร์นั้น</string>
     <string name="viewer_settings_title">ตัวดูไฟล์</string>
 </resources>

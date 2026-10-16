@@ -24,7 +24,7 @@
     <string name="onboarding_workspaces_message">Apri più schede e passa dall’una all’altra — proprio come nel tuo browser web.</string>
     <string name="onboarding_workspaces_action">Continua</string>
     <string name="onboarding_workspaces_hint">Tieni aperte più schede contemporaneamente.</string>
-    <string name="onboarding_workspaces_explorer_title">Explorer</string>
+    <string name="onboarding_workspaces_explorer_title">Esplora file</string>
     <string name="onboarding_workspaces_explorer_description">Sfoglia i tuoi file.</string>
     <string name="onboarding_workspaces_searcher_title">Ricerca</string>
     <string name="onboarding_workspaces_searcher_description">Trova le cose.</string>
@@ -363,21 +363,20 @@
     <string name="tour_swipe_switch_body">Scorri a sinistra o a destra in un punto qualsiasi della pagina per spostarti tra le schede aperte.</string>
     <string name="tour_swipe_create_title">Scorri per avviare una scheda</string>
     <string name="tour_swipe_create_body">Scorri oltre l’ultima scheda e Butler te ne offre una nuova.</string>
-    <string name="tour_swipe_panes_title">Più di una scheda alla volta</string>
-    <string name="tour_swipe_panes_body">Su uno schermo più grande, o in orizzontale, Butler mostra più schede affiancate. Le impostazioni del layout in Schede stabiliscono quando questo avviene.</string>
+    <string name="tour_swipe_panes_title">Scegli la disposizione</string>
+    <string name="tour_swipe_panes_body">Vuoi una disposizione diversa? Apri il menu di Butler e scegli Disposizione. Le disposizioni disponibili dipendono dalle dimensioni della finestra; alcune richiedono Pro.</string>
     <string name="tour_panes_rail_title">Tutte le tue schede</string>
     <string name="tour_panes_rail_body">Qui trovi tutte le schede aperte. Toccane una e scegli il riquadro a cui assegnarla. Tieni premuta una scheda, poi trascinala, per cambiarne l’ordine.</string>
     <string name="tour_panes_divider_title">Ridimensiona i riquadri</string>
     <string name="tour_panes_divider_body">Trascina questo separatore per dare più spazio a un riquadro.</string>
     <string name="tour_panes_layout_title">Cambia la disposizione</string>
-    <string name="tour_panes_layout_body">Tocca il pulsante Butler e scegli Layout per riorganizzare i riquadri. Le impostazioni Schede fissano un layout per ogni orientamento.</string>
+    <string name="tour_panes_layout_body">Tocca il pulsante Butler e scegli Disposizione per riorganizzare i riquadri. Le impostazioni Schede fissano un layout per ogni orientamento.</string>
 
     <string name="workspace_creating_placeholder">Creazione scheda in corso…</string>
     <string name="workspace_ondemand_swipe_title">Scorri per creare una nuova scheda</string>
 
     <!-- Adaptive Workspace -->
     <string name="workspace_adaptive_pane_ready">Il riquadro %1$d è pronto per il contenuto</string>
-    <string name="workspace_adaptive_add_action">Aggiungi scheda</string>
 
     <string name="workspace_badge_tip_title">Suggerimento: indicatori sul pulsante schede</string>
     <string name="workspace_badge_open_workspaces">Numero di schede aperte</string>
@@ -467,7 +466,7 @@
     <string name="support_contact_category_bug">Segnalazione di bug</string>
     <string name="support_contact_workspace_label">Area correlata</string>
     <string name="support_contact_workspace_general">Generale</string>
-    <string name="support_contact_workspace_explorer">Explorer</string>
+    <string name="support_contact_workspace_explorer">Esplora file</string>
     <string name="support_contact_workspace_searcher">Ricerca</string>
     <string name="support_contact_workspace_editor">Editor</string>
     <string name="support_contact_description_label">Descrizione</string>

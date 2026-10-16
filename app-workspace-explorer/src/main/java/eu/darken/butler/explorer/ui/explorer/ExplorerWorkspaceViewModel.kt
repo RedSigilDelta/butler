@@ -45,6 +45,10 @@ import eu.darken.butler.common.files.smb.credentials.SmbCredentialStore
 import eu.darken.butler.common.files.smb.credentials.SmbCredentialUnavailableException
 import eu.darken.butler.common.files.smb.location.SmbLocationManager
 import eu.darken.butler.common.files.validation.FilenameValidator
+import eu.darken.butler.common.files.webdav.WebDavCertificateException
+import eu.darken.butler.common.files.webdav.WebDavConnectionTester
+import eu.darken.butler.common.files.webdav.credentials.WebDavCredentialStore
+import eu.darken.butler.common.files.webdav.location.WebDavLocationManager
 import eu.darken.butler.common.flow.SingleEventFlow
 import eu.darken.butler.common.flow.combine as combineMany
 import eu.darken.butler.common.issue.Issue
@@ -53,6 +57,7 @@ import eu.darken.butler.common.navigation.destSetup
 import eu.darken.butler.common.navigation.upgrade
 import eu.darken.butler.common.trash.TrashManager
 import eu.darken.butler.common.trash.TrashRepo
+import eu.darken.butler.common.trash.TrashSettings
 import eu.darken.butler.common.ui.ViewModel4
 import eu.darken.butler.explorer.R
 import eu.darken.butler.explorer.core.DefaultStartLocation
@@ -95,6 +100,7 @@ import eu.darken.butler.explorer.ui.explorer.dialogs.ExplorerDialogEvent
 import eu.darken.butler.explorer.ui.explorer.dialogs.ExplorerDialogState
 import eu.darken.butler.explorer.ui.explorer.dialogs.NetworkProtocol
 import eu.darken.butler.explorer.ui.explorer.dialogs.SftpLocationFormInput
+import eu.darken.butler.explorer.ui.explorer.dialogs.WebDavLocationFormInput
 import eu.darken.butler.explorer.ui.explorer.dialogs.SmbLocationFormInput
 import eu.darken.butler.explorer.ui.explorer.dialogs.ExplorerDialogState.*
 import eu.darken.butler.explorer.ui.explorer.dialogs.ExplorerDialogState.ItemInfo.InfoContext.SingleNetwork.Capacity as SingleNetworkCapacity
@@ -137,6 +143,7 @@ import eu.darken.butler.workspace.core.operations.AppInstallLauncher
 import eu.darken.butler.workspace.core.operations.Operation
 import eu.darken.butler.workspace.core.operations.OperationPathPlan
 import eu.darken.butler.workspace.core.operations.OperationFocusRequest
+import eu.darken.butler.workspace.core.operations.skipsDeleteConfirmation
 import eu.darken.butler.workspace.ui.page.WorkspacePageChrome
 import eu.darken.butler.workspace.core.returnResult
 import eu.darken.butler.workspace.ui.operations.OperationsDisplayState
@@ -199,8 +206,12 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
     private val sftpCredentialStore: SftpCredentialStore,
     private val sftpConnectionTester: SftpConnectionTester,
     private val sftpPrivateKeyReader: SftpPrivateKeyReader,
+    private val webDavLocationManager: WebDavLocationManager,
+    private val webDavCredentialStore: WebDavCredentialStore,
+    private val webDavConnectionTester: WebDavConnectionTester,
     private val trashManager: TrashManager,
     private val trashRepo: TrashRepo,
+    private val trashSettings: TrashSettings,
     private val itemInfoCalculator: ItemInfoCalculator,
     private val pickerHelper: ExplorerPickerHelper,
     private val favoritesRepo: ExplorerFavoritesRepo,
@@ -300,9 +311,23 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         doLaunch = doLaunch,
         tag = tag,
     )
+    private val webDavLocations = ExplorerWebDavLocationController(
+        locationManager = webDavLocationManager,
+        credentialStore = webDavCredentialStore,
+        connectionTester = webDavConnectionTester,
+        upgradeRepo = upgradeRepo,
+        showUpgradeHint = { smbLocations.showUpgradeHint(it) },
+        dialogs = dialogs,
+        workspace = ::getWorkspace,
+        currentLocation = { cachedCurrentLocation },
+        clearSelection = ::clearSelection,
+        doLaunch = doLaunch,
+        tag = tag,
+    )
     private val networkLocations = ExplorerNetworkLocationController(
         smbLocationManager = smbLocationManager,
         sftpLocationManager = sftpLocationManager,
+        webDavLocationManager = webDavLocationManager,
         dialogs = dialogs,
         workspace = ::getWorkspace,
         currentLocation = { cachedCurrentLocation },
@@ -340,10 +365,19 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         upgradeRepo = upgradeRepo,
         onNetworkLocked = { smbLocations.showUpgradeHint(SmbUpgradeHint.Reason.LOCKED) },
         showSftpLocationForm = { location -> sftpLocations.promptSignIn(location.id) },
+        showWebDavLocationForm = { location -> webDavLocations.promptSignIn(location.id) },
         selectedItems = { selection.selectedItems.value },
         toggleSelection = { selection.toggle(it) },
         clearSelection = ::clearSelection,
         getState = ::getState,
+        isOpenOnTapEnabled = { explorerSettings.openFilesOnTap.value() },
+        openInViewer = ::openFileInPlace,
+        openExternally = { item ->
+            fileIntentHelper.openFileWithDefault(
+                item = item,
+                chooserTitle = context.getString(WorkspaceR.string.workspace_open_with_chooser_title),
+            )
+        },
         doLaunch = doLaunch,
         tag = tag,
     )
@@ -476,6 +510,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                 when (val request = state?.networkSignInRequest()) {
                     is NetworkSignInRequest.Smb -> smbLocations.promptSignIn(request.locationId)
                     is NetworkSignInRequest.Sftp -> sftpLocations.promptSignIn(request.locationId)
+                    is NetworkSignInRequest.WebDav -> webDavLocations.promptSignIn(request.locationId)
                     null -> Unit
                 }
             }
@@ -499,7 +534,13 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         // Handle dialog events
         dialogEvents
             .onEach { event ->
-                dialogs.handle(event)
+                if (event is ExplorerDialogEvent.ShowDeleteConfirmation &&
+                    shouldSkipDeleteConfirmation(event.items, event.initialPermanentDelete)
+                ) {
+                    onDeleteConfirmed(event.items, forcePermDelete = false)
+                } else {
+                    dialogs.handle(event)
+                }
             }
             .launchInViewModel()
 
@@ -617,6 +658,8 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         val filterState: FilterState = FilterState(),
         val useRegexPatterns: Boolean = false,
         val useBackButtonForNavigation: Boolean = false,
+        /** A tap opens a file, so files carry a button for their actions sheet instead. */
+        val directOpenEnabled: Boolean = false,
         val pickerConfig: PickerConfig? = null,
         /**
          * The resolution that belongs to [locationId], or null while the new location's rules are
@@ -800,6 +843,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                     viewSettings.filterState,
                     explorerSettings.useRegexPatterns.flow,
                     explorerSettings.useBackButtonForNavigation.flow,
+                    explorerSettings.openFilesOnTap.flow,
                     pickerConfigFlow,
                     trashManager.isEnabled,
                     saveAsFilenameFlow,
@@ -809,7 +853,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                     favoritesController.feedback,
                     directorySizes,
                     favoritesSelection.selection,
-                ) { wsStateInner, listing, selectionState, viewStyle, dialogState, resolvedSort, filterState, useRegexPatterns, useBackButtonForNavigation, pickerConfig, recycleBinEnabled, saveAsFilename, highlightedItemIds, focusedItemIndex, favorites, favoriteFeedback, sizes, favoriteSelection ->
+                ) { wsStateInner, listing, selectionState, viewStyle, dialogState, resolvedSort, filterState, useRegexPatterns, useBackButtonForNavigation, openFilesOnTap, pickerConfig, recycleBinEnabled, saveAsFilename, highlightedItemIds, focusedItemIndex, favorites, favoriteFeedback, sizes, favoriteSelection ->
                     val items = listing?.items
                     val disabledItems = items?.let { pickerHelper.computeDisabledItems(it, pickerConfig) } ?: emptySet()
 
@@ -889,6 +933,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                         filterState = filterState,
                         useRegexPatterns = useRegexPatterns,
                         useBackButtonForNavigation = useBackButtonForNavigation,
+                        directOpenEnabled = openFilesOnTap && pickerConfig == null,
                         pickerConfig = pickerConfig,
                         resolvedSort = matchedSort,
                         sortSettings = matchedSort?.resolution?.settings ?: SortSettings(),
@@ -975,6 +1020,8 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
     fun onItemClick(item: ExplorerItem) = selection.onItemClick(item)
 
     fun onItemLongClick(item: ExplorerItem) = selection.onItemLongClick(item)
+
+    fun onItemMoreClick(item: ExplorerItem.File) = navigation.showFileOptions(item)
 
     fun onFavoriteClick(fav: FavoriteItem) {
         log(tag) { "onFavoriteClick($fav)" }
@@ -1203,7 +1250,14 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                             .toSet()
 
                         if (pathsToDelete.isNotEmpty()) {
-                            dialogEvents.emit(ExplorerDialogEvent.ShowDeleteConfirmation(pathsToDelete))
+                            if (shouldSkipDeleteConfirmation(pathsToDelete, permanentRequested = false)) {
+                                // Cleared before the submit, which suspends until the trash move is
+                                // done: a second tap meanwhile would submit the same items again.
+                                clearSelection()
+                                onDeleteConfirmed(pathsToDelete, forcePermDelete = false)
+                            } else {
+                                dialogEvents.emit(ExplorerDialogEvent.ShowDeleteConfirmation(pathsToDelete))
+                            }
                         }
                     }
                 }
@@ -1394,6 +1448,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                 when (val location = selectedItem.location) {
                     is NetworkLocation.Smb -> smbLocations.showEditForm(location.id)
                     is NetworkLocation.Sftp -> sftpLocations.showEditForm(location.id)
+                    is NetworkLocation.WebDav -> webDavLocations.showEditForm(location.id)
                 }
             }
             is ExplorerActionBarItem.Network.RemoveLocation -> {
@@ -1427,16 +1482,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
                 dismissDialog()
                 trash.deleteNestedPermanently(action.items)
             }
-            is ExplorerActionBarItem.File.Open -> {
-                try {
-                    // The viewer opens as a drill-down of this workspace: an overlay in the same
-                    // pane that returns here on back.
-                    openFile(item = action.item, asDrillDown = true)
-                } catch (e: Exception) {
-                    log(tag, ERROR) { "Failed to open ${action.item.lookup.name}: ${e.asLog()}" }
-                    errorEvents.emit(e)
-                }
-            }
+            is ExplorerActionBarItem.File.Open -> openFileInPlace(action.item)
             is ExplorerActionBarItem.File.OpenInTab -> {
                 try {
                     openFile(item = action.item, asDrillDown = false)
@@ -1716,6 +1762,17 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         )
     }
 
+    private suspend fun openFileInPlace(item: ExplorerItem.File) {
+        try {
+            // The viewer opens as a drill-down of this workspace: an overlay in the same pane that
+            // returns here on back.
+            openFile(item = item, asDrillDown = true)
+        } catch (e: Exception) {
+            log(tag, ERROR) { "Failed to open ${item.lookup.name}: ${e.asLog()}" }
+            errorEvents.emit(e)
+        }
+    }
+
     private suspend fun orderSelection(selected: Collection<ExplorerItem>): List<ExplorerItem> {
         val stateSnap = getState()
         val location = stateSnap.currentLocation
@@ -1773,6 +1830,17 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         }
     }
 
+    private suspend fun shouldSkipDeleteConfirmation(items: Set<APath<*>>, permanentRequested: Boolean): Boolean {
+        val skips = skipsDeleteConfirmation(
+            targets = items,
+            permanentRequested = permanentRequested,
+            trashEnabled = trashSettings.enabled.value(),
+            confirmTrashMove = trashSettings.confirmTrashMove.value(),
+        )
+        if (skips) log(tag) { "Moving ${items.size} items to the trash without confirmation" }
+        return skips
+    }
+
     fun onDeleteConfirmed(items: Set<APath<*>>, forcePermDelete: Boolean = false) = launch {
         log(tag) { "onDeleteConfirmed($items, forcePermDelete=$forcePermDelete)" }
         dialogs.dismiss()
@@ -1806,6 +1874,7 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         when (protocol) {
             NetworkProtocol.SMB -> smbLocations.showAddForm()
             NetworkProtocol.SFTP -> sftpLocations.showAddForm()
+            NetworkProtocol.WEBDAV -> webDavLocations.showAddForm()
         }
     }
 
@@ -1823,6 +1892,20 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
     fun onSftpRetrustRejected(confirmationId: Uuid) = sftpLocations.onRetrustRejected(confirmationId)
 
     fun onReviewSftpHostKeyChange(change: SftpHostKeyChangedException) = sftpLocations.reviewHostKeyChange(change)
+
+    fun onWebDavLocationFormSubmit(input: WebDavLocationFormInput) = webDavLocations.onFormSubmit(input)
+
+    fun onWebDavCertificateAccepted(confirmationId: Uuid, input: WebDavLocationFormInput) =
+        webDavLocations.onCertificateAccepted(confirmationId, input)
+
+    fun onWebDavCertificateRejected(confirmationId: Uuid) = webDavLocations.onCertificateRejected(confirmationId)
+
+    fun onWebDavRetrustAccepted(confirmationId: Uuid) = webDavLocations.onRetrustAccepted(confirmationId)
+
+    fun onWebDavRetrustRejected(confirmationId: Uuid) = webDavLocations.onRetrustRejected(confirmationId)
+
+    fun onReviewWebDavCertificate(problem: WebDavCertificateException) =
+        webDavLocations.reviewCertificateProblem(problem)
 
     suspend fun onRevealSmbFormPassword(form: ExplorerDialogState.SmbLocationForm): RevealedPassword? =
         withContext(dispatchers.IO) {
@@ -2209,7 +2292,12 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
             return@launch
         }
         if (validateTrashDrop(getState(), id, payload)) {
-            dialogs.show(TrashDropConfirmation(payload))
+            val paths = payload.items.map { it.path }.toSet()
+            if (shouldSkipDeleteConfirmation(paths, permanentRequested = false)) {
+                moveDropToTrash(paths)
+            } else {
+                dialogs.show(TrashDropConfirmation(payload))
+            }
             return@launch
         }
         val paneDestination = validateDropDestination(getState(), id, payload)
@@ -2240,20 +2328,21 @@ class ExplorerWorkspaceViewModel @AssistedInject constructor(
         log(tag) { "onTrashDropConfirmed(${payload.items.size} items)" }
         // Atomic claim of the dialog: a second invocation (double tap) finds it already gone.
         if (!dialogs.dismissIfCurrent(TrashDropConfirmation(payload))) return
-        launch {
-            val paths = payload.items.map { it.path }.toSet()
-            if (paths.isEmpty()) return@launch
-            getWorkspace().execute(
-                ExplorerCommand.Delete(
-                    targets = paths,
-                    options = ExplorerCommand.Delete.Options(forcePermDelete = false),
-                )
+        launch { moveDropToTrash(payload.items.map { it.path }.toSet()) }
+    }
+
+    private suspend fun moveDropToTrash(paths: Set<APath<*>>) {
+        if (paths.isEmpty()) return
+        getWorkspace().execute(
+            ExplorerCommand.Delete(
+                targets = paths,
+                options = ExplorerCommand.Delete.Options(forcePermDelete = false),
             )
-            clearSelection()
-            // Trash is a virtual location; BrowsingEngine's incremental FS updates key on
-            // parent == current.path and don't cover it, so re-list explicitly.
-            navigation.refresh()
-        }
+        )
+        clearSelection()
+        // Trash is a virtual location; BrowsingEngine's incremental FS updates key on
+        // parent == current.path and don't cover it, so re-list explicitly.
+        navigation.refresh()
     }
 
     fun onDropConfirmed(payload: WorkspaceDragPayload, destination: APath<*>, move: Boolean) = launch {

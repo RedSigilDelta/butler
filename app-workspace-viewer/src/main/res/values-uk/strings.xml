@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Відкрити за допомогою</string>
     <string name="viewer_image_content_description">Зображення %1$s</string>
     <string name="viewer_toolbar_folder_label">Тека</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Файл %1$d з %2$d</string>
     <string name="viewer_back_action">Назад</string>
 
     <!-- Action bar -->
@@ -49,7 +51,7 @@
 
     <!-- APK file -->
     <string name="viewer_apk_version_label">Версія</string>
-    <string name="viewer_apk_min_sdk_label">Min SDK</string>
+    <string name="viewer_apk_min_sdk_label">Мінімальний SDK</string>
     <string name="viewer_apk_target_sdk_label">Цільовий SDK</string>
     <string name="viewer_apk_installed_label">Встановлено</string>
     <string name="viewer_apk_not_installed_value">Не встановлено</string>
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">Цей файл не вдалося прочитати</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">Після видалення файлу, відкритого з теки, показувати наступний файл із цієї теки замість закриття переглядача.</string>
     <string name="viewer_settings_show_next_after_delete_title">Показувати наступний файл після видалення</string>
+    <string name="viewer_settings_swipe_between_files_title">Перемикати файли гортанням</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Проведіть пальцем ліворуч або праворуч по файлу, відкритому з теки, щоб показати попередній або наступний файл із цієї теки.</string>
     <string name="viewer_settings_title">Переглядач</string>
 </resources>

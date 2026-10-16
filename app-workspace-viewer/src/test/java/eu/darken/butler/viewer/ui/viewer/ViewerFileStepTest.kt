@@ -1,6 +1,7 @@
 package eu.darken.butler.viewer.ui.viewer
 
 import eu.darken.butler.common.ca.toCaString
+import eu.darken.butler.common.datastore.DataStoreValue
 import eu.darken.butler.common.files.APath
 import eu.darken.butler.common.files.LocalPath
 import eu.darken.butler.common.files.MimeInfo
@@ -27,6 +28,8 @@ import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
@@ -68,16 +71,22 @@ class ViewerFileStepTest : BaseTest() {
     /** Set to hold a create inside the ViewModel, so a second tap arrives while one is in flight. */
     private var createGate: CompletableDeferred<Unit>? = null
 
+    /** Set to hand later lookups of the origin a different flow than [origin], e.g. one that has not emitted. */
+    private var originOverride: Flow<Workspace<*>?>? = null
+
     private lateinit var listing: MutableStateFlow<List<APath<*>>>
     private lateinit var origin: MutableStateFlow<Workspace<*>?>
     private lateinit var remoteState: MutableStateFlow<WorkspaceRemote.State>
     private lateinit var workspaces: MutableStateFlow<ViewerWorkspace>
+    private lateinit var swipeSetting: MutableStateFlow<Boolean>
 
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         creates.clear()
         createGate = null
+        originOverride = null
+        swipeSetting = MutableStateFlow(true)
         listing = MutableStateFlow(listOf(a, b, c))
         origin = MutableStateFlow(makeOrigin())
         remoteState = MutableStateFlow(
@@ -164,7 +173,7 @@ class ViewerFileStepTest : BaseTest() {
             context = mockk(relaxed = true),
             workspaceProvider = mockk<WorkspaceProvider>().apply {
                 every { retrieve(workspaceId) } returns workspaces
-                every { retrieve(originId) } returns origin
+                every { retrieve(originId) } answers { originOverride ?: origin }
             },
             workspaceRemote = remote,
             imageSourceFactory = mockk(relaxed = true),
@@ -175,6 +184,7 @@ class ViewerFileStepTest : BaseTest() {
             clipboardRepo = mockk(relaxed = true),
             trashSettings = mockk<TrashSettings>(relaxed = true).apply {
                 every { enabled.flow } returns flowOf(false)
+                every { confirmTrashMove.flow } returns flowOf(true)
             },
             operationsManager = mockk(relaxed = true),
             appInstallLauncher = mockk(relaxed = true),
@@ -183,6 +193,9 @@ class ViewerFileStepTest : BaseTest() {
             errorIncidentStore = incidentStore,
             viewerSettings = mockk<ViewerSettings>().apply {
                 every { showNextAfterDelete } returns mockDataStoreValue(true)
+                every { swipeBetweenFiles } returns mockk<DataStoreValue<Boolean>>().apply {
+                    every { flow } returns swipeSetting
+                }
             },
             chromeFactory = mockk<WorkspacePageChrome.Factory>().apply {
                 every { create(any(), any()) } returns mockk<WorkspacePageChrome>().apply {
@@ -346,11 +359,59 @@ class ViewerFileStepTest : BaseTest() {
     }
 
     @Test
+    fun `neighbours resolved for the file on display are not pending`() = runTest2 {
+        val vm = makeViewModel()
+        startCollecting(vm)
+
+        vm.readyState.neighbours?.current shouldBe b
+        vm.readyState.neighboursPending shouldBe false
+    }
+
+    @Test
+    fun `a file missing from the listing is resolved, not pending`() = runTest2 {
+        val vm = makeViewModel()
+        startCollecting(vm)
+
+        listing.value = listOf(a, c)
+
+        vm.readyState.neighbours shouldBe null
+        vm.readyState.neighboursPending shouldBe false
+    }
+
+    @Test
+    fun `a step is pending until the next file's listing resolves`() = runTest2 {
+        val vm = makeViewModel()
+        startCollecting(vm)
+        vm.readyState.neighboursPending shouldBe false
+
+        val lateOrigin = MutableSharedFlow<Workspace<*>?>(replay = 1)
+        originOverride = lateOrigin
+        workspaces.value = makeWorkspace(c)
+
+        // The step's content is already loaded; only its place in the listing is outstanding.
+        vm.readyState.source shouldBe ViewerSource.Stored(c)
+        vm.readyState.content.shouldBeInstanceOf<ViewerContent.Image>()
+        vm.readyState.neighbours shouldBe null
+        vm.readyState.neighboursPending shouldBe true
+
+        lateOrigin.emit(makeOrigin())
+
+        vm.readyState.neighbours?.current shouldBe c
+        vm.readyState.neighboursPending shouldBe false
+    }
+
+    @Test
     fun `a viewer opened on a selection steps through that selection`() = runTest2 {
         val vm = makeViewModel(path = a, listingSourceId = null, stepPaths = listOf(a, c, d))
         startCollecting(vm)
 
-        vm.readyState.neighbours shouldBe ViewerNeighbours(current = a, previous = null, next = c)
+        vm.readyState.neighbours shouldBe ViewerNeighbours(
+            current = a,
+            previous = null,
+            next = c,
+            position = 1,
+            count = 3,
+        )
         vm.steps shouldBe listOf(
             ViewerActionBarItem.PreviousFile(isEnabled = false),
             ViewerActionBarItem.NextFile(isEnabled = true),
@@ -379,7 +440,13 @@ class ViewerFileStepTest : BaseTest() {
         val vm = makeViewModel(path = a, stepPaths = listOf(a, c, d))
         startCollecting(vm)
 
-        vm.readyState.neighbours shouldBe ViewerNeighbours(current = a, previous = null, next = c)
+        vm.readyState.neighbours shouldBe ViewerNeighbours(
+            current = a,
+            previous = null,
+            next = c,
+            position = 1,
+            count = 3,
+        )
     }
 
     @Test
@@ -390,5 +457,24 @@ class ViewerFileStepTest : BaseTest() {
 
         vm.readyState.neighbours shouldBe null
         vm.steps shouldBe emptyList()
+    }
+
+    @Test
+    fun `the swipe gate follows the setting`() = runTest2 {
+        val vm = makeViewModel()
+        startCollecting(vm)
+
+        vm.readyState.swipeToStep shouldBe true
+
+        swipeSetting.value = false
+        vm.readyState.swipeToStep shouldBe false
+        // Only the gesture goes: the bar keeps its arrows.
+        vm.steps shouldBe listOf(
+            ViewerActionBarItem.PreviousFile(isEnabled = true),
+            ViewerActionBarItem.NextFile(isEnabled = true),
+        )
+
+        swipeSetting.value = true
+        vm.readyState.swipeToStep shouldBe true
     }
 }

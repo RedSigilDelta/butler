@@ -3,15 +3,20 @@ package eu.darken.butler.explorer.ui.explorer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.twotone.Lan
 import eu.darken.butler.common.ca.toCaString
+import eu.darken.butler.common.files.APath
 import eu.darken.butler.common.files.APathLookup
 import eu.darken.butler.common.files.ArchivePath
+import eu.darken.butler.common.files.GatewaySwitch
 import eu.darken.butler.common.files.LocalPath
 import eu.darken.butler.common.files.MimeInfo
 import eu.darken.butler.common.files.SftpPath
+import eu.darken.butler.common.files.WebDavPath
 import eu.darken.butler.common.files.network.NetworkCredentialAvailability
+import eu.darken.butler.common.files.metadata.FileType
 import eu.darken.butler.common.files.network.NetworkLocation
 import eu.darken.butler.common.files.sftp.location.SftpLocation
 import eu.darken.butler.common.files.smb.location.SmbLocation
+import eu.darken.butler.common.files.webdav.location.WebDavLocation
 import eu.darken.butler.common.progress.Progress
 import eu.darken.butler.explorer.core.ExplorerNavigation
 import eu.darken.butler.explorer.core.ExplorerWorkspace
@@ -21,6 +26,10 @@ import eu.darken.butler.explorer.core.favorites.ExplorerFavoritesRepo
 import eu.darken.butler.explorer.ui.explorer.dialogs.ExplorerDialogState
 import eu.darken.butler.explorer.ui.explorer.preview.MockDataProvider
 import eu.darken.butler.upgrade.UpgradeRepo
+import eu.darken.butler.workspace.contracts.explorer.PickerConfig
+import eu.darken.butler.workspace.core.Workspace
+import eu.darken.butler.workspace.core.WorkspaceEvent
+import eu.darken.butler.workspace.core.WorkspaceRemote
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.mockk.Runs
@@ -30,16 +39,21 @@ import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.testTimeSource
 import org.junit.jupiter.api.Test
 import testhelpers.BaseTest
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
+import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
 
 class ExplorerNavigationControllerTest : BaseTest() {
@@ -55,12 +69,35 @@ class ExplorerNavigationControllerTest : BaseTest() {
         return ExplorerItem.RegularDirectory(lookup = lookup)
     }
 
-    private fun fileItem(name: String): ExplorerItem.RegularFile {
+    private fun fileItem(
+        name: String,
+        mime: String = "text/plain",
+        at: APath<*> = path(name),
+    ): ExplorerItem.RegularFile {
         val lookup = mockk<APathLookup<*>>().apply {
-            every { lookedUp } returns path(name)
+            every { lookedUp } returns at
+            every { this@apply.path } returns at.path
             every { this@apply.name } returns name
         }
-        return ExplorerItem.RegularFile(lookup = lookup, mimeType = MimeInfo("text/plain"))
+        return ExplorerItem.RegularFile(lookup = lookup, mimeType = MimeInfo(mime))
+    }
+
+    private fun symlinkItem(name: String, mime: String, target: APath<*>): ExplorerItem.SymbolicLink {
+        val linkPath = path(name)
+        val lookup = mockk<APathLookup<*>>().apply {
+            every { lookedUp } returns linkPath
+            every { this@apply.path } returns linkPath.path
+            every { this@apply.name } returns name
+            every { this@apply.target } returns target
+        }
+        return ExplorerItem.SymbolicLink(lookup = lookup, mimeType = MimeInfo(mime), targetPath = target)
+    }
+
+    private fun gatewaySwitch(targetType: FileType): GatewaySwitch = mockk<GatewaySwitch>().apply {
+        val targetLookup = mockk<APathLookup<APath<*>>>().apply {
+            every { fileType } returns targetType
+        }
+        coEvery { lookup(any(), any()) } returns targetLookup
     }
 
     private fun networkItem(
@@ -117,6 +154,9 @@ class ExplorerNavigationControllerTest : BaseTest() {
 
     private var lockedHints = 0
     private val sftpForms = mutableListOf<SftpLocation>()
+    private val webDavForms = mutableListOf<WebDavLocation>()
+    private val openedInViewer = mutableListOf<ExplorerItem.File>()
+    private val openedExternally = mutableListOf<ExplorerItem.File>()
 
     private fun CoroutineScope.controller(
         workspace: ExplorerWorkspace = mockWorkspace(),
@@ -128,20 +168,37 @@ class ExplorerNavigationControllerTest : BaseTest() {
         clearSelection: () -> Unit = {},
         state: ExplorerWorkspaceViewModel.State = ExplorerWorkspaceViewModel.State(),
         upgradeRepo: UpgradeRepo = FakeUpgradeRepo(pro = true),
+        workspaceRemote: WorkspaceRemote = mockk(),
+        gatewaySwitch: GatewaySwitch = mockk(),
+        openOnTap: Boolean = false,
+        externalHandOff: Boolean = true,
+        openInViewerGate: CompletableDeferred<Unit>? = null,
+        timeSource: TimeSource = TimeSource.Monotonic,
     ) = ExplorerNavigationController(
         workspaceId = workspaceId,
         workspace = { workspace },
-        workspaceRemote = mockk(),
-        gatewaySwitch = mockk(),
+        workspaceRemote = workspaceRemote,
+        gatewaySwitch = gatewaySwitch,
         dialogs = dialogs,
         favoritesRepo = favoritesRepo,
         upgradeRepo = upgradeRepo,
         onNetworkLocked = { lockedHints++ },
         showSftpLocationForm = { sftpForms.add(it) },
+        showWebDavLocationForm = { webDavForms.add(it) },
         selectedItems = selectedItems,
         toggleSelection = {},
         clearSelection = clearSelection,
         getState = { state },
+        isOpenOnTapEnabled = { openOnTap },
+        openInViewer = {
+            openedInViewer.add(it)
+            openInViewerGate?.await()
+        },
+        openExternally = {
+            openedExternally.add(it)
+            externalHandOff
+        },
+        timeSource = timeSource,
         doLaunch = { block -> launch { block() } },
         tag = "test",
     )
@@ -227,6 +284,51 @@ class ExplorerNavigationControllerTest : BaseTest() {
         sftpForms shouldBe listOf((item.location as NetworkLocation.Sftp).location)
         dialogs.current() shouldBe ExplorerDialogState.None
         coVerify(exactly = 0) { workspace.navigate(any()) }
+    }
+
+    @Test
+    fun `a free user tapping a sign-in required WebDAV location gets the upgrade hint, not the form`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(dialogs = dialogs, upgradeRepo = FakeUpgradeRepo(pro = false))
+        val item = MockDataProvider.createMockStorageWebDav(status = ExplorerItem.Storage.Network.Status.SIGN_IN_REQUIRED)
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        lockedHints shouldBe 1
+        webDavForms shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+    }
+
+    @Test
+    fun `a pro user tapping a sign-in required WebDAV location is routed to the WebDAV form`() = runTest {
+        val dialogs = dialogs()
+        val workspace = mockWorkspace()
+        val controller = controller(workspace = workspace, dialogs = dialogs)
+        val item = MockDataProvider.createMockStorageWebDav(status = ExplorerItem.Storage.Network.Status.SIGN_IN_REQUIRED)
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        lockedHints shouldBe 0
+        webDavForms shouldBe listOf((item.location as NetworkLocation.WebDav).location)
+        sftpForms shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+        coVerify(exactly = 0) { workspace.navigate(any()) }
+    }
+
+    @Test
+    fun `a pro user tapping a WebDAV location navigates into it`() = runTest {
+        val workspace = mockWorkspace()
+        val controller = controller(workspace = workspace)
+        val item = MockDataProvider.createMockStorageWebDav()
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        lockedHints shouldBe 0
+        webDavForms shouldBe emptyList()
+        coVerify { workspace.navigate(item.target) }
     }
 
     @Test
@@ -325,6 +427,307 @@ class ExplorerNavigationControllerTest : BaseTest() {
             coVerify(exactly = 0) { workspace.navigate(any()) }
             dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>().item shouldBe item
         }
+    }
+
+    @Test
+    fun `with open on tap off a file tap still shows the options sheet`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(dialogs = dialogs, openOnTap = false)
+        val item = fileItem("photo.jpg", mime = "image/jpeg")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>().item shouldBe item
+        openedInViewer shouldBe emptyList()
+        openedExternally shouldBe emptyList()
+    }
+
+    @Test
+    fun `with open on tap on types the viewer renders open in the viewer`() = runTest {
+        listOf(
+            fileItem("photo.jpg", mime = "image/jpeg"),
+            fileItem("invoice.pdf", mime = "application/pdf"),
+            fileItem("notes.txt", mime = "text/plain"),
+            fileItem("app.apk", mime = MimeInfo.MIME_APK),
+        ).forEach { item ->
+            openedInViewer.clear()
+            val dialogs = dialogs()
+            val controller = controller(dialogs = dialogs, openOnTap = true)
+
+            controller.navigate(item as ExplorerItem)
+            runCurrent()
+
+            openedInViewer shouldBe listOf(item)
+            openedExternally shouldBe emptyList()
+            dialogs.current() shouldBe ExplorerDialogState.None
+        }
+    }
+
+    @Test
+    fun `with open on tap a second tap while the first open is running does not open the file twice`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val controller = controller(openOnTap = true, openInViewerGate = gate, timeSource = testTimeSource)
+        val item = fileItem("photo.jpg", mime = "image/jpeg")
+
+        controller.navigate(item as ExplorerItem)
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedInViewer shouldBe listOf(item)
+
+        gate.complete(Unit)
+        runCurrent()
+    }
+
+    @Test
+    fun `with open on tap a tap after the first open finished opens the file again`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val controller = controller(openOnTap = true, openInViewerGate = gate, timeSource = testTimeSource)
+        val item = fileItem("photo.jpg", mime = "image/jpeg")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+        gate.complete(Unit)
+        runCurrent()
+        advanceTimeBy(600.milliseconds)
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedInViewer shouldBe listOf(item, item)
+    }
+
+    @Test
+    fun `with open on tap a second tap right after a hand-off does not hand the file off again`() = runTest {
+        val controller = controller(openOnTap = true, externalHandOff = true, timeSource = testTimeSource)
+        val item = fileItem("clip.mp4", mime = "video/mp4")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedExternally shouldBe listOf(item)
+    }
+
+    @Test
+    fun `with open on tap a tap after the cooldown hands the file off again`() = runTest {
+        val controller = controller(openOnTap = true, externalHandOff = true, timeSource = testTimeSource)
+        val item = fileItem("clip.mp4", mime = "video/mp4")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+        advanceTimeBy(600.milliseconds)
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedExternally shouldBe listOf(item, item)
+    }
+
+    @Test
+    fun `with open on tap a different file tapped right after an open still opens`() = runTest {
+        val controller = controller(openOnTap = true, timeSource = testTimeSource)
+        val first = fileItem("photo.jpg", mime = "image/jpeg")
+        val second = fileItem("notes.txt", mime = "text/plain")
+
+        controller.navigate(first as ExplorerItem)
+        runCurrent()
+        controller.navigate(second as ExplorerItem)
+        runCurrent()
+
+        openedInViewer shouldBe listOf(first, second)
+    }
+
+    @Test
+    fun `with open on tap on an app install bundle opens in the viewer`() = runTest {
+        listOf("app.xapk", "app.apks", "app.apkm").forEach { name ->
+            openedInViewer.clear()
+            val workspace = mockWorkspace()
+            val dialogs = dialogs()
+            val controller = controller(workspace = workspace, dialogs = dialogs, openOnTap = true)
+            val item = fileItem(name, mime = "application/zip")
+
+            controller.navigate(item as ExplorerItem)
+            runCurrent()
+
+            openedInViewer shouldBe listOf(item)
+            openedExternally shouldBe emptyList()
+            dialogs.current() shouldBe ExplorerDialogState.None
+            coVerify(exactly = 0) { workspace.navigate(any()) }
+        }
+    }
+
+    @Test
+    fun `with open on tap on a zip tap still browses into the archive`() = runTest {
+        val workspace = mockWorkspace()
+        val dialogs = dialogs()
+        val controller = controller(workspace = workspace, dialogs = dialogs, openOnTap = true)
+        val item = fileItem("photos.zip", mime = "application/zip")
+        val expectedTarget = ExplorerNavigation.Target.Directory(ArchivePath.root(item.lookup.lookedUp))
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        coVerify { workspace.navigate(expectedTarget) }
+        openedInViewer shouldBe emptyList()
+        openedExternally shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+    }
+
+    @Test
+    fun `with open on tap on a symlink to a folder still navigates into it`() = runTest {
+        val workspace = mockWorkspace()
+        val target = path("real-folder")
+        val controller = controller(
+            workspace = workspace,
+            gatewaySwitch = gatewaySwitch(FileType.DIRECTORY),
+            openOnTap = true,
+        )
+        val item = symlinkItem("folder-link", mime = "application/octet-stream", target = target)
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        coVerify { workspace.navigate(ExplorerNavigation.Target.Directory(target)) }
+        openedInViewer shouldBe emptyList()
+        openedExternally shouldBe emptyList()
+    }
+
+    @Test
+    fun `with open on tap on a symlink to an unsupported file is handed to another app`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(
+            dialogs = dialogs,
+            gatewaySwitch = gatewaySwitch(FileType.FILE),
+            openOnTap = true,
+        )
+        val item = symlinkItem("clip-link.mp4", mime = "video/mp4", target = path("clip.mp4"))
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedExternally shouldBe listOf(item)
+        openedInViewer shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+    }
+
+    @Test
+    fun `with open on tap on an unsupported local file is handed to another app`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(dialogs = dialogs, openOnTap = true, externalHandOff = true)
+        val item = fileItem("clip.mp4", mime = "video/mp4")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedExternally shouldBe listOf(item)
+        openedInViewer shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+    }
+
+    @Test
+    fun `with open on tap on a failed hand-off falls back to the options sheet`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(dialogs = dialogs, openOnTap = true, externalHandOff = false)
+        val item = fileItem("clip.mp4", mime = "video/mp4")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        openedExternally shouldBe listOf(item)
+        val sheet = dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>()
+        sheet.item shouldBe item
+        sheet.showInFolder shouldBe false
+    }
+
+    @Test
+    fun `with open on tap on an unsupported file that cannot be handed off shows the options sheet`() = runTest {
+        listOf<APath<*>>(
+            SftpPath(sftpLocationId, listOf("media", "clip.mp4")),
+            ArchivePath(path("media.zip"), listOf("clip.mp4")),
+        ).forEach { location ->
+            val dialogs = dialogs()
+            val controller = controller(dialogs = dialogs, openOnTap = true)
+            val item = fileItem("clip.mp4", mime = "video/mp4", at = location)
+
+            controller.navigate(item as ExplorerItem)
+            runCurrent()
+
+            openedExternally shouldBe emptyList()
+            openedInViewer shouldBe emptyList()
+            dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>().item shouldBe item
+        }
+    }
+
+    @Test
+    fun `with open on tap on the fallback sheet in Recent offers show in folder`() = runTest {
+        val dialogs = dialogs()
+        val controller = controller(
+            dialogs = dialogs,
+            state = ExplorerWorkspaceViewModel.State(currentLocation = ExplorerLocation.Recent()),
+            openOnTap = true,
+            externalHandOff = false,
+        )
+        val item = fileItem("clip.mp4", mime = "video/mp4")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        val sheet = dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>()
+        sheet.item shouldBe item
+        sheet.showInFolder shouldBe true
+    }
+
+    @Test
+    fun `with open on tap on a file-single picker still selects the file instantly`() = runTest {
+        val config = PickerConfig(callerWorkspaceId = Workspace.Id(), selection = PickerConfig.Selection.FileSingle)
+        val workspace = mockWorkspace().apply {
+            every { pickerConfig } returns config
+        }
+        val workspaceRemote = mockk<WorkspaceRemote>(relaxed = true)
+        val dialogs = dialogs()
+        val controller = controller(
+            workspace = workspace,
+            dialogs = dialogs,
+            workspaceRemote = workspaceRemote,
+            openOnTap = true,
+        )
+        val item = fileItem("photo.jpg", mime = "image/jpeg")
+        val expectedPath = item.lookup.lookedUp
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        coVerify {
+            workspaceRemote.emitEvent(
+                WorkspaceEvent.PickerResult(
+                    workspaceId = workspaceId,
+                    callerWorkspaceId = config.callerWorkspaceId,
+                    selectedPaths = listOf(expectedPath),
+                )
+            )
+        }
+        openedInViewer shouldBe emptyList()
+        openedExternally shouldBe emptyList()
+        dialogs.current() shouldBe ExplorerDialogState.None
+    }
+
+    @Test
+    fun `with open on tap on a directory-single picker still shows the options sheet`() = runTest {
+        val config = PickerConfig(callerWorkspaceId = Workspace.Id(), selection = PickerConfig.Selection.DirectorySingle)
+        val workspace = mockWorkspace().apply {
+            every { pickerConfig } returns config
+        }
+        val dialogs = dialogs()
+        val controller = controller(workspace = workspace, dialogs = dialogs, openOnTap = true)
+        val item = fileItem("photo.jpg", mime = "image/jpeg")
+
+        controller.navigate(item as ExplorerItem)
+        runCurrent()
+
+        dialogs.current().shouldBeInstanceOf<ExplorerDialogState.FileOptions>().item shouldBe item
+        openedInViewer shouldBe emptyList()
+        openedExternally shouldBe emptyList()
     }
 
     @Test
@@ -599,5 +1002,48 @@ class ExplorerNavigationControllerTest : BaseTest() {
         coVerify {
             workspace.navigate(ExplorerNavigation.Target.Directory(SftpPath(sftpLocationId, listOf(" ", "draft "))))
         }
+    }
+
+    private val webdavLocationId = Uuid.parse("77777777-8888-9999-0000-111111111111")
+
+    @Test
+    fun `an edited WebDAV path is relative to the location root`() = runTest {
+        val workspace = mockWorkspace()
+        val controller = controller(workspace = workspace)
+
+        controller.navigateToEditedPath(WebDavPath(webdavLocationId, listOf("docs")), "/photos//100% ?#done/ a\\b ")
+        runCurrent()
+
+        coVerify {
+            workspace.navigate(
+                ExplorerNavigation.Target.Directory(
+                    WebDavPath(webdavLocationId, listOf("photos", "100% ?#done", " a\\b ")),
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun `an edited WebDAV path cannot climb out of the location`() = runTest {
+        val workspace = mockWorkspace()
+        val controller = controller(workspace = workspace)
+
+        controller.navigateToEditedPath(WebDavPath(webdavLocationId, listOf("docs")), "../other")
+        controller.navigateToEditedPath(WebDavPath(webdavLocationId, listOf("docs")), "docs/./a")
+        controller.navigateToEditedPath(WebDavPath(webdavLocationId, listOf("docs")), "a\u0000b")
+        runCurrent()
+
+        coVerify(exactly = 0) { workspace.navigate(any()) }
+    }
+
+    @Test
+    fun `an empty edited WebDAV path goes to the location root`() = runTest {
+        val workspace = mockWorkspace()
+        val controller = controller(workspace = workspace)
+
+        controller.navigateToEditedPath(WebDavPath(webdavLocationId, listOf("docs")), "/")
+        runCurrent()
+
+        coVerify { workspace.navigate(ExplorerNavigation.Target.Directory(WebDavPath.root(webdavLocationId))) }
     }
 }

@@ -13,7 +13,7 @@ permissions:
 jobs:
   device-tests:
     name: Device tests (Android ${{ matrix.api }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -71,6 +71,11 @@ jobs:
         if: ${{ !cancelled() }}
         run: tools/sftp-device-results.py app-common-io/build/outputs/androidTest-results/connected
 
+      # The WebDAV device tests need no server, but a skipped or missing test class still passes.
+      - name: Require executed WebDAV device tests
+        if: ${{ !cancelled() }}
+        run: tools/webdav-device-results.py app-common-io/build/outputs/androidTest-results/connected
+
       - name: Upload device test results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
@@ -88,7 +93,7 @@ jobs:
   # without Gradle. Both flavors in one Gradle run exhaust the CI daemon's 512 MB Metaspace in KSP.
   minified-build:
     name: Build the minified app
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout source code
@@ -120,7 +125,7 @@ jobs:
   # The SFTP end-to-end test needs a FOSS build, where sponsoring unlocks Pro without a store.
   minified-foss-build:
     name: Build the minified FOSS app
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout source code
@@ -151,7 +156,7 @@ jobs:
 
   previous-release-build:
     name: Build the previous release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Checkout source code
@@ -209,7 +214,7 @@ jobs:
   minified-tests:
     name: Minified app tests (Android 36)
     needs: [ minified-build, minified-foss-build, previous-release-build ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout source code

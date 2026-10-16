@@ -3,6 +3,8 @@
     <string name="viewer_open_with_action">פתיחה באמצעות</string>
     <string name="viewer_image_content_description">תמונה %1$s</string>
     <string name="viewer_toolbar_folder_label">תיקייה</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">קובץ %1$d מתוך %2$d</string>
     <string name="viewer_back_action">חזרה</string>
     <string name="viewer_previous_file_action">הקובץ הקודם</string>
     <string name="viewer_next_file_action">הקובץ הבא</string>
@@ -92,4 +94,6 @@
     <string name="viewer_settings_title">מציג</string>
     <string name="viewer_settings_show_next_after_delete_title">הצגת הקובץ הבא לאחר מחיקה</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">לאחר מחיקת קובץ שנפתח מתיקייה, הצגת הקובץ הבא בתיקייה זו במקום סגירת המציג.</string>
+    <string name="viewer_settings_swipe_between_files_title">החלקה בין קבצים</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">החלקה שמאלה או ימינה על קובץ שנפתח מתיקייה מציגה את הקובץ הקודם או הבא בתיקייה זו.</string>
 </resources>

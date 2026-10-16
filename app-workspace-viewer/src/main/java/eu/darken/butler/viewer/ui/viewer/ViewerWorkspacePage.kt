@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -164,6 +165,8 @@ fun ViewerWorkspacePage(
      * parameter so tests can read and drive the zoom.
      */
     zoomableState: ZoomableState = rememberViewerZoomableState(),
+    /** Test seam for the back-gesture strips a swipe must not start in; null reads the window's. */
+    swipeStepEdgeStripsPx: Pair<Int, Int>? = null,
     onAction: (ViewerActionBarItem) -> Unit = {},
     onOpenWith: () -> Unit = {},
     onSaveCopy: () -> Unit = {},
@@ -301,20 +304,33 @@ fun ViewerWorkspacePage(
 
             is ViewerWorkspaceViewModel.State.Ready -> {
                 val isToolbarCollapsed = shouldCollapseToolbar(state.content, zoomedIn)
-                // Neither a spinner nor an error card is a surface the user can tap, and retry and
-                // back both live in the chrome - it must not stay hidden from an earlier tap. A PDF
-                // page without a bitmap is the same situation: it is either still rendering or has
-                // failed, and both put an untappable surface on screen.
+                var lastShownFileInfo by remember { mutableStateOf<ViewerFileInfo?>(null) }
+                var lastShownPosition by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+                // An error card is not a surface the user can tap, and retry and back both live in
+                // the chrome - it must not stay hidden from an earlier tap. A PDF page without a
+                // bitmap is the same situation: it is either still rendering or has failed, and both
+                // put an untappable surface on screen.
                 val pdfPageNotShown = state.content is ViewerContent.PdfPreview &&
                     state.pdfPage?.bitmap == null
                 val chromeShown = chromeVisible ||
                     state.content is ViewerContent.Failed ||
-                    state.content is ViewerContent.Loading ||
                     pdfPageNotShown
+
+                val swipeStep = rememberViewerSwipeStep(
+                    state = state,
+                    zoomedIn = zoomedIn,
+                    edgeStripsPx = swipeStepEdgeStripsPx,
+                    onAction = onAction,
+                )
+                // Kept while a step is under way: the file it lands on has no neighbours until its
+                // listing resolves, and a swipe in between must not reach the tab pager.
+                val swipeToStep = state.swipeToStep && (state.neighbours != null || swipeStep.isStepping)
 
                 ViewerContentArea(
                     state = state,
                     zoomableState = zoomableState,
+                    swipeStep = swipeStep,
+                    swipeToStep = swipeToStep,
                     contentPadding = contentPadding,
                     barScrollConnections = barScrollConnections,
                     onOpenWith = onOpenWith,
@@ -327,6 +343,11 @@ fun ViewerWorkspacePage(
                     onSaveIcon = onSaveIcon,
                     onToggleChrome = toggleChrome,
                 )
+
+                // A step's target has no neighbours until its listing resolves; the counter holds meanwhile.
+                val shownPosition = state.neighbours?.let { it.position to it.count }
+                    ?: lastShownPosition.takeIf { state.content is ViewerContent.Loading || state.neighboursPending }
+                SideEffect { lastShownPosition = shownPosition }
 
                 FloatingBarStack(
                     state = topBarStackState,
@@ -348,6 +369,7 @@ fun ViewerWorkspacePage(
                                 // content, which lives nowhere Butler could name.
                                 folderPath = state.source.folderPath?.withLocationNames(),
                                 isCollapsed = isToolbarCollapsed || collapsedFraction > 0.5f,
+                                position = shownPosition,
                                 onBackClick = if (isModal) {
                                     { onPageAction(ViewerPageAction.Close) }
                                 } else null,
@@ -422,8 +444,17 @@ fun ViewerWorkspacePage(
                         }
 
                         // Metadata read before the failure describes a file that is no longer
-                        // there, so next to the error it would read as current.
-                        val fileInfo = state.fileInfo?.takeIf { state.content !is ViewerContent.Failed }
+                        // there, so next to the error it would read as current. While a step's
+                        // target loads, the card keeps what it showed instead of sliding out and
+                        // straight back in.
+                        val fileInfo = when (state.content) {
+                            is ViewerContent.Failed -> null
+                            is ViewerContent.Loading -> state.fileInfo ?: lastShownFileInfo
+                            else -> state.fileInfo
+                        }
+                        SideEffect {
+                            if (state.content !is ViewerContent.Loading) lastShownFileInfo = fileInfo
+                        }
                         FloatingBar(
                             key = ViewerBarKeys.FILEINFO,
                             visible = chromeShown && fileInfo != null,
@@ -480,6 +511,8 @@ private fun ViewerContentArea(
     modifier: Modifier = Modifier,
     state: ViewerWorkspaceViewModel.State.Ready,
     zoomableState: ZoomableState,
+    swipeStep: ViewerSwipeStepState,
+    swipeToStep: Boolean,
     contentPadding: PaddingValues,
     barScrollConnections: List<NestedScrollConnection> = emptyList(),
     onOpenWith: () -> Unit,
@@ -492,105 +525,108 @@ private fun ViewerContentArea(
     onSaveIcon: () -> Unit = {},
     onToggleChrome: () -> Unit = {},
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        when (val content = state.content) {
-            ViewerContent.Loading -> CircularProgressIndicator(
-                modifier = Modifier.align(Alignment.Center),
-            )
+    Box(modifier = modifier.fillMaxSize().viewerSwipeStep(swipeStep, active = swipeToStep)) {
+        Box(modifier = Modifier.fillMaxSize().viewerSwipeStepOffset(swipeStep)) {
+            when (val content = state.content) {
+                ViewerContent.Loading -> CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                )
 
-            is ViewerContent.Image -> state.imageSource?.let { source ->
-                ZoomableFileImage(
-                    imageSource = source,
+                is ViewerContent.Image -> state.imageSource?.let { source ->
+                    ZoomableFileImage(
+                        imageSource = source,
+                        fileName = state.source.displayName,
+                        state = zoomableState,
+                        onClick = onToggleChrome,
+                    )
+                }
+
+                // The only branch that scrolls behind the floating bars, so it is also the only one
+                // that has to inset for them - and the only one that can drive their scroll behaviour.
+                is ViewerContent.Apk -> ApkFileContent(
+                    apkInfo = content.apkInfo,
+                    installState = content.installState,
+                    contentPadding = contentPadding,
+                    onShowIcon = onShowIcon,
+                    onSaveIcon = onSaveIcon,
+                    barScrollConnections = barScrollConnections,
+                    onToggleChrome = onToggleChrome,
+                )
+
+                is ViewerContent.AppBundle -> AppBundleFileContent(
+                    format = content.format,
+                    apkInfo = content.apkInfo,
+                    installState = content.installState,
+                    splitCount = content.splitCount,
+                    hasObb = content.hasObb,
+                    needsElevationForObb = content.needsElevationForObb,
+                    contentPadding = contentPadding,
+                    barScrollConnections = barScrollConnections,
+                    onToggleChrome = onToggleChrome,
+                )
+
+                is ViewerContent.PdfPreview -> PdfPreviewContent(
+                    pdfPage = state.pdfPage,
+                    pageCount = content.pageCount,
                     fileName = state.source.displayName,
-                    state = zoomableState,
+                    zoomableState = zoomableState,
                     onClick = onToggleChrome,
-                )
-            }
-
-            // The only branch that scrolls behind the floating bars, so it is also the only one
-            // that has to inset for them - and the only one that can drive their scroll behaviour.
-            is ViewerContent.Apk -> ApkFileContent(
-                apkInfo = content.apkInfo,
-                installState = content.installState,
-                contentPadding = contentPadding,
-                onShowIcon = onShowIcon,
-                onSaveIcon = onSaveIcon,
-                barScrollConnections = barScrollConnections,
-                onToggleChrome = onToggleChrome,
-            )
-
-            is ViewerContent.AppBundle -> AppBundleFileContent(
-                format = content.format,
-                apkInfo = content.apkInfo,
-                installState = content.installState,
-                splitCount = content.splitCount,
-                hasObb = content.hasObb,
-                needsElevationForObb = content.needsElevationForObb,
-                contentPadding = contentPadding,
-                barScrollConnections = barScrollConnections,
-                onToggleChrome = onToggleChrome,
-            )
-
-            is ViewerContent.PdfPreview -> PdfPreviewContent(
-                pdfPage = state.pdfPage,
-                pageCount = content.pageCount,
-                fileName = state.source.displayName,
-                zoomableState = zoomableState,
-                onClick = onToggleChrome,
-                onRetry = onRetry,
-            )
-
-            is ViewerContent.Text -> TextFileContent(
-                preview = state.textPreview?.preview,
-                failed = state.textPreview?.failed == true,
-                // Asked of the action bar rather than re-derived: it already knows when the Editor
-                // has nothing to open, and two answers to that would drift apart.
-                editorAvailable = state.actions.contains(ViewerActionBarItem.OpenInEditor),
-                contentPadding = contentPadding,
-                barScrollConnections = barScrollConnections,
-                onOpenInEditor = onOpenInEditor,
-                onRetry = onRetry,
-                onToggleChrome = onToggleChrome,
-            )
-
-            is ViewerContent.Archive -> ArchivePlaceholder(
-                format = content.format,
-                access = content.access,
-                // Same gate the action bar's entry goes through: a browse button for a container
-                // that is no longer there is a dead end.
-                isGone = state.externalChange == ViewerExternalChange.Gone,
-                onBrowse = onBrowseArchive,
-                onSaveCopy = onSaveCopy,
-                onToggleChrome = onToggleChrome,
-            )
-
-            is ViewerContent.Unsupported -> UnsupportedFilePlaceholder(
-                mimeType = content.mime.rawType,
-                isStreamed = state.source is ViewerSource.Streamed,
-                onOpenWith = onOpenWith,
-                onSaveCopy = onSaveCopy,
-                onToggleChrome = onToggleChrome,
-            )
-
-            // A file that is simply gone is not a fault to report or retry, so it gets the shared
-            // "path is gone" treatment rather than an error card with a dead retry button.
-            is ViewerContent.Failed -> if (content.error is PathGoneError) {
-                PathGoneBody(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(24.dp),
-                    error = content.error,
-                )
-            } else {
-                ErrorCard(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .padding(24.dp),
-                    title = stringResource(R.string.viewer_error_title),
-                    error = content.error,
-                    onShareError = { onShareError(content.error) },
                     onRetry = onRetry,
                 )
+
+                is ViewerContent.Text -> TextFileContent(
+                    preview = state.textPreview?.preview,
+                    failed = state.textPreview?.failed == true,
+                    // Asked of the action bar rather than re-derived: it already knows when the Editor
+                    // has nothing to open, and two answers to that would drift apart.
+                    editorAvailable = state.actions.contains(ViewerActionBarItem.OpenInEditor),
+                    swipeToStep = swipeToStep,
+                    contentPadding = contentPadding,
+                    barScrollConnections = barScrollConnections,
+                    onOpenInEditor = onOpenInEditor,
+                    onRetry = onRetry,
+                    onToggleChrome = onToggleChrome,
+                )
+
+                is ViewerContent.Archive -> ArchivePlaceholder(
+                    format = content.format,
+                    access = content.access,
+                    // Same gate the action bar's entry goes through: a browse button for a container
+                    // that is no longer there is a dead end.
+                    isGone = state.externalChange == ViewerExternalChange.Gone,
+                    onBrowse = onBrowseArchive,
+                    onSaveCopy = onSaveCopy,
+                    onToggleChrome = onToggleChrome,
+                )
+
+                is ViewerContent.Unsupported -> UnsupportedFilePlaceholder(
+                    mimeType = content.mime.rawType,
+                    isStreamed = state.source is ViewerSource.Streamed,
+                    onOpenWith = onOpenWith,
+                    onSaveCopy = onSaveCopy,
+                    onToggleChrome = onToggleChrome,
+                )
+
+                // A file that is simply gone is not a fault to report or retry, so it gets the shared
+                // "path is gone" treatment rather than an error card with a dead retry button.
+                is ViewerContent.Failed -> if (content.error is PathGoneError) {
+                    PathGoneBody(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp),
+                        error = content.error,
+                    )
+                } else {
+                    ErrorCard(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp),
+                        title = stringResource(R.string.viewer_error_title),
+                        error = content.error,
+                        onShareError = { onShareError(content.error) },
+                        onRetry = onRetry,
+                    )
+                }
             }
         }
     }
@@ -637,6 +673,8 @@ private fun ViewerWorkspacePageSteppablePreview() {
                 current = previewPath,
                 previous = LocalPath.build("/storage/emulated/0/DCIM/Camera/IMG_20240817_183041.jpg"),
                 next = null,
+                position = 7,
+                count = 7,
             ),
         ),
     )

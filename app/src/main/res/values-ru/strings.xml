@@ -374,21 +374,20 @@
     <string name="tour_swipe_switch_body">Смахните влево или вправо в любом месте на странице, чтобы переместиться между открытыми вкладками.</string>
     <string name="tour_swipe_create_title">Смахните, чтобы начать вкладку</string>
     <string name="tour_swipe_create_body">Смахните мимо последней вкладки, и Butler предложит вам новую.</string>
-    <string name="tour_swipe_panes_title">Более одной вкладки одновременно</string>
-    <string name="tour_swipe_panes_body">На большом экране или в альбомной ориентации Butler показывает несколько вкладок рядом. Параметры макета на вкладке «Вкладки» определяют, когда это происходит.</string>
+    <string name="tour_swipe_panes_title">Выберите расположение</string>
+    <string name="tour_swipe_panes_body">Нужно другое расположение? Откройте меню Butler и выберите «Расположение». Доступные варианты зависят от размера окна, некоторые требуют Pro.</string>
     <string name="tour_panes_rail_title">Все ваши вкладки</string>
     <string name="tour_panes_rail_body">Каждая открытая вкладка находится здесь. Нажмите на одну и выберите область, в которую она должна пойти. Нажмите и удерживайте вкладку, затем перетащите, чтобы изменить их порядок.</string>
     <string name="tour_panes_divider_title">Изменить размер областей</string>
     <string name="tour_panes_divider_body">Перетащите этот разделитель, чтобы дать одной области больше места.</string>
     <string name="tour_panes_layout_title">Изменить расположение</string>
-    <string name="tour_panes_layout_body">Нажмите кнопку Butler и выберите «Макет», чтобы переупорядочить области. Параметры на вкладке «Вкладки» закрепляют макет на ориентацию.</string>
+    <string name="tour_panes_layout_body">Нажмите кнопку Butler и выберите «Расположение», чтобы переупорядочить области. Параметры на вкладке «Вкладки» закрепляют макет на ориентацию.</string>
 
     <string name="workspace_creating_placeholder">Создание вкладки…</string>
     <string name="workspace_ondemand_swipe_title">Смахните, чтобы создать новую вкладку</string>
 
     <!-- Adaptive Workspace -->
     <string name="workspace_adaptive_pane_ready">Область %1$d готова для содержимого</string>
-    <string name="workspace_adaptive_add_action">Добавить вкладку</string>
 
     <string name="workspace_badge_tip_title">Совет: индикаторы кнопок вкладок</string>
     <string name="workspace_badge_open_workspaces">Количество открытых вкладок</string>
@@ -526,7 +525,7 @@
     <string name="support_debuglog_clear_confirm_message">Удалить все сохранённые сеансы журнала отладки?</string>
 
     <!-- Debug Log Screen -->
-    <string name="debug_log_share_subject">Butler DebugLog - %1$s</string>
+    <string name="debug_log_share_subject">Журнал отладки Butler - %1$s</string>
     <string name="debug_log_screen_subtitle">Экспортировать информацию отладки для устранения неполадок</string>
     <string name="debug_log_screen_sensitive_information_title">Конфиденциальная информация</string>
 

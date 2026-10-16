@@ -277,9 +277,9 @@
     <string name="acknowledgement_android_robot_subtitle">หุ่นยนต์ Android ถูกทำซ้ำหรือดัดแปลงจากผลงานที่ Google สร้างและเผยแพร่ และใช้ตามเงื่อนไขของ Creative Commons 3.0 Attribution License</string>
     <string name="acknowledgement_jetpack_compose_title">Jetpack Compose</string>
     <string name="acknowledgement_jetpack_compose_subtitle">เครื่องมือสมัยใหม่ของ Android สำหรับสร้าง UI แบบเนทีฟ (APACHE 2.0)</string>
-    <string name="acknowledgement_jetpack_libraries_title">Jetpack libraries</string>
+    <string name="acknowledgement_jetpack_libraries_title">ไลบรารี Jetpack</string>
     <string name="acknowledgement_jetpack_libraries_subtitle">Room, WorkManager, DataStore, Navigation และไลบรารี AndroidX อื่นๆ (APACHE 2.0)</string>
-    <string name="acknowledgement_kotlin_extensions_title">Kotlin extensions</string>
+    <string name="acknowledgement_kotlin_extensions_title">ส่วนขยาย Kotlin</string>
     <string name="acknowledgement_kotlin_extensions_subtitle">ไลบรารี Coroutines และ Serialization (APACHE 2.0)</string>
     <string name="acknowledgement_coil_title">Coil</string>
     <string name="acknowledgement_coil_subtitle">ไลบรารีโหลดรูปภาพที่ใช้ Kotlin Coroutines (APACHE 2.0)</string>
@@ -289,7 +289,7 @@
     <string name="acknowledgement_apache_mina_sshd_subtitle">ไคลเอนต์ SSH และ SFTP สำหรับเชื่อมต่อกับเซิร์ฟเวอร์ SFTP (APACHE 2.0)</string>
     <string name="acknowledgement_slf4j_title">SLF4J</string>
     <string name="acknowledgement_slf4j_subtitle">Simple Logging Facade for Java, API บันทึกที่ Apache MINA SSHD ใช้ (MIT)</string>
-    <string name="acknowledgement_square_libraries_title">Square libraries</string>
+    <string name="acknowledgement_square_libraries_title">ไลบรารี Square</string>
     <string name="acknowledgement_square_libraries_subtitle">ไลบรารีเครือข่าย Retrofit, OkHttp และ OkIO (APACHE 2.0)</string>
     <string name="acknowledgement_accompanist_title">Accompanist</string>
     <string name="acknowledgement_accompanist_subtitle">ยูทิลิตีสำหรับ Jetpack Compose (APACHE 2.0)</string>
@@ -312,7 +312,7 @@
     <string name="upgrade_status_pro">สถานะ: Pro</string>
     <string name="upgrade_status_foss">สถานะ: FOSS</string>
 
-    <string name="storage_area_sdcard_label">SD card</string>
+    <string name="storage_area_sdcard_label">การ์ด SD</string>
     <string name="storage_area_public_label">ที่เก็บข้อมูลสาธารณะ</string>
     <string name="storage_area_public_app_data_label">ข้อมูลแอปสาธารณะ</string>
 
@@ -345,21 +345,20 @@
     <string name="tour_swipe_switch_body">ปัดซ้ายหรือขวาที่ใดก็ได้บนหน้าจอเพื่อสลับไปมาระหว่างแท็บที่เปิดอยู่</string>
     <string name="tour_swipe_create_title">ปัดเพื่อสร้างแท็บ</string>
     <string name="tour_swipe_create_body">ปัดเลยแท็บสุดท้าย Butler จะเสนอแท็บใหม่ให้ทันที</string>
-    <string name="tour_swipe_panes_title">แสดงได้มากกว่าหนึ่งแท็บพร้อมกัน</string>
-    <string name="tour_swipe_panes_body">บนหน้าจอที่ใหญ่ขึ้น หรือในแนวนอน Butler จะแสดงหลายแท็บเรียงข้างกัน การตั้งค่าเลย์เอาต์ในเมนูแท็บเป็นตัวกำหนดว่าจะแสดงเมื่อใด</string>
+    <string name="tour_swipe_panes_title">เลือกเค้าโครง</string>
+    <string name="tour_swipe_panes_body">อยากจัดเรียงแบบอื่นไหม เปิดเมนู Butler แล้วเลือกเค้าโครง เค้าโครงที่ใช้ได้ขึ้นอยู่กับขนาดหน้าต่าง และบางแบบต้องใช้ Pro</string>
     <string name="tour_panes_rail_title">แท็บทั้งหมดของคุณ</string>
     <string name="tour_panes_rail_body">แท็บที่เปิดอยู่ทั้งหมดจะอยู่ที่นี่ แตะแท็บแล้วเลือกพาเนลที่ต้องการวาง กดค้างแท็บแล้วลากเพื่อเปลี่ยนลำดับ</string>
     <string name="tour_panes_divider_title">ปรับขนาดพาเนล</string>
     <string name="tour_panes_divider_body">ลากเส้นแบ่งนี้เพื่อขยายพื้นที่ให้พาเนลใดพาเนลหนึ่ง</string>
     <string name="tour_panes_layout_title">เปลี่ยนการจัดวาง</string>
-    <string name="tour_panes_layout_body">แตะปุ่ม Butler แล้วเลือกเลย์เอาต์เพื่อจัดพาเนลใหม่ การตั้งค่าแท็บจะกำหนดเลย์เอาต์แยกตามแนวจอ</string>
+    <string name="tour_panes_layout_body">แตะปุ่ม Butler แล้วเลือกเค้าโครงเพื่อจัดพาเนลใหม่ การตั้งค่าแท็บจะกำหนดเลย์เอาต์แยกตามแนวจอ</string>
 
     <string name="workspace_creating_placeholder">กำลังสร้างแท็บ…</string>
     <string name="workspace_ondemand_swipe_title">ปัดเพื่อสร้างแท็บใหม่</string>
 
     <!-- Adaptive Workspace -->
     <string name="workspace_adaptive_pane_ready">พาเนล %1$d พร้อมสำหรับเนื้อหา</string>
-    <string name="workspace_adaptive_add_action">เพิ่มแท็บ</string>
 
     <string name="workspace_badge_tip_title">เคล็ดลับ: ตัวบ่งชี้บนปุ่มแท็บ</string>
     <string name="workspace_badge_open_workspaces">จำนวนแท็บที่เปิดอยู่</string>
@@ -492,7 +491,7 @@
     <string name="support_debuglog_clear_confirm_message">ลบเซสชันบันทึกดีบักที่เก็บไว้ทั้งหมด?</string>
 
     <!-- Debug Log Screen -->
-    <string name="debug_log_share_subject">Butler DebugLog - %1$s</string>
+    <string name="debug_log_share_subject">บันทึกดีบัก Butler - %1$s</string>
     <string name="debug_log_screen_subtitle">ส่งออกข้อมูลดีบักเพื่อแก้ปัญหา</string>
     <string name="debug_log_screen_sensitive_information_title">ข้อมูลที่ละเอียดอ่อน</string>
 

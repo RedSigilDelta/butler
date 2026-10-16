@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Otwórz za pomocą</string>
     <string name="viewer_image_content_description">Obraz %1$s</string>
     <string name="viewer_toolbar_folder_label">Folder</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Plik %1$d z %2$d</string>
     <string name="viewer_back_action">Wstecz</string>
 
     <!-- Action bar -->
@@ -50,7 +52,7 @@
     <!-- APK file -->
     <string name="viewer_apk_version_label">Wersja</string>
     <string name="viewer_apk_min_sdk_label">Min SDK</string>
-    <string name="viewer_apk_target_sdk_label">Target SDK</string>
+    <string name="viewer_apk_target_sdk_label">Docelowy SDK</string>
     <string name="viewer_apk_installed_label">Zainstalowany</string>
     <string name="viewer_apk_not_installed_value">Nie zainstalowany</string>
     <string name="viewer_apk_installed_unknown_value">Nie udało się sprawdzić</string>
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">Ten plik nie mógł być odczytany</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">Po usunięciu pliku otwartego z folderu pokaż następny plik z tego folderu zamiast zamykać podgląd.</string>
     <string name="viewer_settings_show_next_after_delete_title">Pokaż następny plik po usunięciu</string>
+    <string name="viewer_settings_swipe_between_files_title">Przesuwaj między plikami</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Przesuń palcem w lewo lub w prawo na pliku otwartym z folderu, aby pokazać poprzedni lub następny plik z tego folderu.</string>
     <string name="viewer_settings_title">Podgląd</string>
 </resources>

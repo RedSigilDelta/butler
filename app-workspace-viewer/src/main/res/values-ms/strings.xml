@@ -3,6 +3,8 @@
     <string name="viewer_open_with_action">Buka dengan</string>
     <string name="viewer_image_content_description">Imej %1$s</string>
     <string name="viewer_toolbar_folder_label">Folder</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Fail %1$d daripada %2$d</string>
     <string name="viewer_back_action">Kembali</string>
     <string name="viewer_previous_file_action">Fail sebelumnya</string>
     <string name="viewer_next_file_action">Fail seterusnya</string>
@@ -92,4 +94,6 @@
     <string name="viewer_settings_title">Pemapar</string>
     <string name="viewer_settings_show_next_after_delete_title">Tunjukkan fail seterusnya selepas memadam</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">Selepas memadam fail yang dibuka daripada folder, tunjukkan fail seterusnya dalam folder itu dan bukannya menutup pemapar.</string>
+    <string name="viewer_settings_swipe_between_files_title">Leret antara fail</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Leret ke kiri atau kanan pada fail yang dibuka daripada folder untuk menunjukkan fail sebelumnya atau seterusnya dalam folder itu.</string>
 </resources>

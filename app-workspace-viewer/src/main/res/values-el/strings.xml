@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Άνοιγμα με</string>
     <string name="viewer_image_content_description">Εικόνα %1$s</string>
     <string name="viewer_toolbar_folder_label">Φάκελος</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Αρχείο %1$d από %2$d</string>
     <string name="viewer_back_action">Πίσω</string>
 
     <!-- Action bar -->
@@ -112,5 +114,7 @@
     <string name="viewer_text_unreadable_label">Αυτό το αρχείο δεν μπορούσε να διαβαστεί</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">Μετά τη διαγραφή ενός αρχείου που άνοιξε από φάκελο, εμφάνιση του επόμενου αρχείου του φακέλου αντί για κλείσιμο του προβολέα.</string>
     <string name="viewer_settings_show_next_after_delete_title">Εμφάνιση επόμενου αρχείου μετά τη διαγραφή</string>
+    <string name="viewer_settings_swipe_between_files_title">Σύρσιμο μεταξύ αρχείων</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Σύρσιμο αριστερά ή δεξιά σε ένα αρχείο που άνοιξε από φάκελο για εμφάνιση του προηγούμενου ή του επόμενου αρχείου του φακέλου.</string>
     <string name="viewer_settings_title">Προβολέας</string>
 </resources>

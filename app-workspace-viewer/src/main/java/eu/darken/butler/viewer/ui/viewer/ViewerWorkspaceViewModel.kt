@@ -63,6 +63,7 @@ import eu.darken.butler.workspace.core.operations.AppInstallLauncher
 import eu.darken.butler.workspace.core.operations.Operation
 import eu.darken.butler.workspace.core.operations.OperationsManager
 import eu.darken.butler.workspace.core.operations.partitionByTrashSupport
+import eu.darken.butler.workspace.core.operations.skipsDeleteConfirmation
 import eu.darken.butler.workspace.core.WorkspaceAction
 import eu.darken.butler.workspace.core.WorkspaceEvent
 import eu.darken.butler.workspace.core.WorkspaceProvider
@@ -306,16 +307,18 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
      */
     private val deletedPaths = MutableStateFlow<Set<APath<*>>>(emptySet())
 
-    /** Where a step from the file on display would land, or null when there is nothing to step to. */
-    private val neighboursFlow: Flow<ViewerNeighbours?> = workspaceSource.flatMapLatest { workspace ->
+    /** Where a step from [path] would land, or null [neighbours] when there is nothing to step to. */
+    private data class ResolvedNeighbours(val path: APath<*>?, val neighbours: ViewerNeighbours?)
+
+    private val neighboursFlow: Flow<ResolvedNeighbours> = workspaceSource.flatMapLatest { workspace ->
         val path = workspace.storedPath
         // A selection does not change after the viewer opened, so it has no origin to outlive.
         val stepPaths = workspace.stepPaths
         if (stepPaths != null && path != null) {
-            return@flatMapLatest flowOf(resolveNeighbours(path, stepPaths))
+            return@flatMapLatest flowOf(ResolvedNeighbours(path, resolveNeighbours(path, stepPaths)))
         }
         val originId = workspace.listingSourceId
-        if (originId == null || path == null) return@flatMapLatest flowOf(null)
+        if (originId == null || path == null) return@flatMapLatest flowOf(ResolvedNeighbours(path, null))
         val live = workspaceProvider.retrieve(originId).flatMapLatest { origin ->
             (origin as? Workspace.FileListingSource)?.fileListing ?: flowOf<List<APath<*>>?>(null)
         }
@@ -330,7 +333,7 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
                 else -> lastListing?.takeIf { it.first == originId }?.second
             }
             files?.filterNot { it != path && it in deleted }
-        }.map { files -> files?.let { resolveNeighbours(path, it) } }
+        }.map { files -> ResolvedNeighbours(path, files?.let { resolveNeighbours(path, it) }) }
     }.distinctUntilChanged()
 
     val state = combineMany(
@@ -341,7 +344,8 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
         textPreviewFlow,
         trashSettings.enabled.flow,
         neighboursFlow,
-    ) { snapshot, renderFailure, imageSource, pdfPage, textPreview, trashEnabled, rawNeighbours ->
+        viewerSettings.swipeBetweenFiles.flow,
+    ) { snapshot, renderFailure, imageSource, pdfPage, textPreview, trashEnabled, resolvedNeighbours, swipeToStep ->
         val (source, workspaceState) = snapshot
         // Only the failure of what is on display now: one recorded for a source this tab has since
         // been rebound away from would hide the new content behind the old one's error.
@@ -372,7 +376,9 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
             failure is ViewerBrokenSymlinkException
         // Only the snapshot resolved for the file on display: this tab is replaced under its own id
         // when a step lands, and the neighbours of the file it left would step the wrong way.
-        val neighbours = rawNeighbours?.takeIf { it.current == (source as? ViewerSource.Stored)?.path }
+        val sourcePath = (source as? ViewerSource.Stored)?.path
+        val neighbours = resolvedNeighbours.neighbours?.takeIf { it.current == sourcePath }
+        val neighboursPending = sourcePath != null && resolvedNeighbours.path != sourcePath
         State.Ready(
             content = content,
             fileInfo = workspaceState.fileInfo,
@@ -392,6 +398,8 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
             ),
             externalChange = workspaceState.externalChange,
             neighbours = neighbours,
+            neighboursPending = neighboursPending,
+            swipeToStep = swipeToStep,
         ) as State
     }
         .catch { error ->
@@ -918,6 +926,17 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
             // Deleting someone else's shared content is not ours to do; the action bar hides it.
             val path = workspaceSource.first().storedPath ?: return@launch
             log(tag, INFO) { "requestDelete($path, permanent=$permanent)" }
+            val skipsConfirmation = skipsDeleteConfirmation(
+                targets = setOf(path),
+                permanentRequested = permanent,
+                trashEnabled = trashSettings.enabled.value(),
+                confirmTrashMove = trashSettings.confirmTrashMove.value(),
+            )
+            if (skipsConfirmation) {
+                log(tag, INFO) { "Moving $path to the trash without confirmation" }
+                if (reserveDelete()) performDelete(path, forcePermDelete = false)
+                return@launch
+            }
             deleteRequestFlow.value = DeleteRequest(targets = setOf(path), initialPermanentDelete = permanent)
         }
     }
@@ -940,17 +959,36 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
             log(tag, WARN) { "confirmDelete() without a pending request, ignoring" }
             return
         }
+        if (!reserveDelete()) return
+        deleteRequestFlow.value = null
+        performDelete(requested, forcePermDelete)
+    }
+
+    /**
+     * Takes [deleteInFlight], unless a delete holds it already or a step is under way: a delete
+     * that skipped the confirmation decides only after a suspension, and a step started meanwhile
+     * is about to replace the file it would delete.
+     */
+    private fun reserveDelete(): Boolean {
         if (!deleteInFlight.compareAndSet(expect = false, update = true)) {
             log(tag, WARN) { "A delete is already in progress, ignoring" }
-            return
+            return false
         }
-        deleteRequestFlow.value = null
+        if (fileStep?.isActive == true) {
+            log(tag, WARN) { "A step is in flight, ignoring the delete" }
+            deleteInFlight.value = false
+            return false
+        }
+        return true
+    }
 
+    /** Runs the delete [reserveDelete] reserved, and releases the reservation once it is done. */
+    private fun performDelete(requested: APath<*>, forcePermDelete: Boolean) {
         launch {
             try {
                 val workspace = workspaceSource.first()
                 if (workspace.storedPath != requested) {
-                    log(tag, WARN) { "confirmDelete() for $requested, but ${workspace.storedPath} is on display" }
+                    log(tag, WARN) { "performDelete() for $requested, but ${workspace.storedPath} is on display" }
                     return@launch
                 }
                 // Taken before the submit: by completion the listing has usually dropped this file
@@ -1241,6 +1279,8 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
             val pdfPage: PdfPage? = null,
             val textPreview: TextPreviewResult? = null,
             val neighbours: ViewerNeighbours? = null,
+            /** True while [neighbours] is not yet resolved for the file on display. */
+            val neighboursPending: Boolean = false,
             val actions: List<ViewerActionBarItem> = viewerActions(
                 source,
                 trashEnabled = false,
@@ -1248,6 +1288,7 @@ class ViewerWorkspaceViewModel @AssistedInject constructor(
                 neighbours = neighbours,
             ),
             val externalChange: ViewerExternalChange? = null,
+            val swipeToStep: Boolean = true,
         ) : State
     }
 

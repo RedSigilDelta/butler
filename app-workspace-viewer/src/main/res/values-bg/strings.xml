@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Отвори с</string>
     <string name="viewer_image_content_description">Изображение %1$s</string>
     <string name="viewer_toolbar_folder_label">Папка</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Файл %1$d от %2$d</string>
     <string name="viewer_back_action">Назад</string>
 
     <!-- Action bar -->
@@ -115,4 +117,6 @@
     <string name="viewer_settings_title">Преглед</string>
     <string name="viewer_settings_show_next_after_delete_title">Показвай следващия файл след изтриване</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">След изтриване на файл, отворен от папка, показвай следващия файл в тази папка, вместо да затваряш прозореца за преглед.</string>
+    <string name="viewer_settings_swipe_between_files_title">Превключвай файловете с плъзгане</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Плъзни наляво или надясно върху файл, отворен от папка, за да покажеш предишния или следващия файл в тази папка.</string>
 </resources>

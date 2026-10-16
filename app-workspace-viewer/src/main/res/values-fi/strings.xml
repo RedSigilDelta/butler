@@ -4,6 +4,8 @@
     <string name="viewer_open_with_action">Avaa sovelluksella</string>
     <string name="viewer_image_content_description">Kuva %1$s</string>
     <string name="viewer_toolbar_folder_label">Kansio</string>
+    <string name="viewer_toolbar_position">%1$d / %2$d</string>
+    <string name="viewer_toolbar_position_description">Tiedosto %1$d, yhteensä %2$d</string>
     <string name="viewer_back_action">Takaisin</string>
 
     <!-- Action bar -->
@@ -115,4 +117,6 @@
     <string name="viewer_settings_title">Katselin</string>
     <string name="viewer_settings_show_next_after_delete_title">Näytä seuraava tiedosto poistamisen jälkeen</string>
     <string name="viewer_settings_show_next_after_delete_subtitle">Kun poistat kansiosta avatun tiedoston, näytä kansion seuraava tiedosto katselimen sulkemisen sijaan.</string>
+    <string name="viewer_settings_swipe_between_files_title">Vaihda tiedostoa pyyhkäisemällä</string>
+    <string name="viewer_settings_swipe_between_files_subtitle">Pyyhkäise kansiosta avatun tiedoston päällä vasemmalle tai oikealle näyttääksesi kansion edellisen tai seuraavan tiedoston.</string>
 </resources>
